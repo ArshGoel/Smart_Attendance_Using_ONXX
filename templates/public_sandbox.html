@@ -7,7 +7,7 @@
 <div class="top-bar">
     <div class="page-title">
         <h1>Zero-Login Public AI Testing Sandbox 🧪</h1>
-        <p>Create your own temporary dataset in memory & test 512D ArcFace multi-photo recognition without logging in!</p>
+        <p>Build your temporary dataset in memory & test live video or photo recognition without logging in!</p>
     </div>
     <div style="display: flex; gap: 12px;">
         <a href="{% url 'home' %}" class="btn btn-secondary">
@@ -23,7 +23,7 @@
         <div style="flex: 1;">
             <h4 style="font-size: 15px; color: #34D399; margin-bottom: 4px; font-weight: 700;">100% Private & Volatile Memory Processing</h4>
             <p style="font-size: 13px; color: #94A3B8; margin: 0; line-height: 1.5;">
-                No images or vector embeddings are stored in any database or cloud server during sandbox testing. All face embedding calculations occur in temporary RAM and are discarded immediately after rendering results.
+                No images or vector embeddings are stored in any database or cloud server during sandbox testing. All face embedding calculations occur in temporary RAM and are discarded immediately after testing.
             </p>
         </div>
     </div>
@@ -58,6 +58,8 @@
                 <input type="file" id="target-photos-input" class="form-input" accept="image/*" multiple>
             </div>
 
+            <div id="add-status" style="margin-bottom: 12px; font-size: 12px; font-weight: 600;"></div>
+
             <button type="button" class="btn btn-primary" style="width: 100%; font-size: 13px; padding: 10px;" onclick="addDatasetTarget()">
                 ➕ Add Student to Dataset
             </button>
@@ -71,41 +73,92 @@
         </div>
     </div>
 
-    <!-- STEP 2: Upload Group Photos & Run Test -->
+    <!-- STEP 2: Choose Test Mode (Live Camera Video OR Upload Group Photos) -->
     <div class="glass-card" style="padding: 24px; border: 1px solid rgba(16, 185, 129, 0.3); display: flex; flex-direction: column; justify-content: space-between;">
         <div>
             <div style="margin-bottom: 16px;">
                 <h3 style="font-size: 17px; font-weight: 700; color: #F8FAFC; display: flex; align-items: center; gap: 8px;">
                     <span style="background: #10B981; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px;">2</span>
-                    Upload Classroom Group Photo(s) or Video 🎬
+                    Test Dataset Recognition
                 </h3>
             </div>
 
-            <p style="font-size: 13px; color: #94A3B8; margin-bottom: 20px;">
-                Upload 1 or multiple classroom photos <strong>OR video files</strong> (.mp4, .webm, .mov) where your dataset students appear.
-            </p>
+            <!-- Mode Selector Tabs -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; background: rgba(15, 23, 42, 0.6); padding: 4px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                <button type="button" id="tab-mode-camera" class="btn btn-primary" style="font-size: 12px; padding: 8px;" onclick="setTestMode('CAMERA')">
+                    📹 Live WebRTC Camera
+                </button>
+                <button type="button" id="tab-mode-photos" class="btn btn-secondary" style="font-size: 12px; padding: 8px;" onclick="setTestMode('PHOTOS')">
+                    📁 Upload Group Photos
+                </button>
+            </div>
 
-            <div class="form-group">
-                <label class="form-label">Select Group Photo(s) or Video File (.mp4, .webm, .mov)</label>
-                <input type="file" id="classroom-images-input" class="form-input" accept="image/*,video/*" multiple style="padding: 12px;">
+            <!-- Mode A: Live WebRTC Camera Controls -->
+            <div id="mode-camera-sec">
+                <p style="font-size: 13px; color: #94A3B8; margin-bottom: 16px;">
+                    Test real-time face recognition against your custom dataset using your webcam feed!
+                </p>
+
+                <div style="display: flex; gap: 12px;">
+                    <button type="button" id="btn-toggle-cam" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 14px; background: linear-gradient(135deg, #10B981, #059669);" onclick="toggleLiveCamera()">
+                        ▶ Start Live Camera Test
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mode B: Upload Classroom Group Photos Controls -->
+            <div id="mode-photos-sec" style="display: none;">
+                <p style="font-size: 13px; color: #94A3B8; margin-bottom: 16px;">
+                    Upload 1 or multiple classroom group photos to analyze faces across images.
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label">Select Classroom / Group Image(s)</label>
+                    <input type="file" id="classroom-images-input" class="form-input" accept="image/*" multiple style="padding: 10px;">
+                </div>
+
+                <button type="button" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 14px; background: linear-gradient(135deg, #10B981, #059669);" onclick="runPhotoSandboxTest()">
+                    🚀 Run Photo Recognition Test
+                </button>
             </div>
         </div>
 
-        <div>
-            <div id="sandbox-status" style="margin-bottom: 16px; font-size: 13px; font-weight: 600;"></div>
-
-            <button type="button" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 15px; background: linear-gradient(135deg, #10B981, #059669);" onclick="runSandboxTest()">
-                🚀 Run AI Recognition Test
-            </button>
+        <div style="margin-top: 16px;">
+            <div id="sandbox-status" style="font-size: 13px; font-weight: 600;"></div>
         </div>
     </div>
 </div>
 
-<!-- Results Section (Hidden until test executed) -->
+<!-- Live Camera Video Container (Shown when camera is active) -->
+<div id="live-camera-card" class="glass-card" style="display: none; padding: 24px; margin-bottom: 36px; border: 2px solid #10B981;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10B981; box-shadow: 0 0 10px #10B981; animation: pulse 1.5s infinite;"></span>
+            Live AI WebRTC Camera Stream
+        </h3>
+        <button type="button" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="stopLiveCamera()">
+            ⏹ Stop Camera
+        </button>
+    </div>
+
+    <!-- Video Feed & Canvas Overlay -->
+    <div style="position: relative; width: 100%; border-radius: 12px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; min-height: 400px; margin-bottom: 20px; border: 1px solid rgba(255, 255, 255, 0.1);">
+        <video id="sandbox-video" autoplay playsinline muted style="width: 100%; max-height: 600px; object-fit: contain; transform: scaleX(-1);"></video>
+        <canvas id="sandbox-video-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+    </div>
+
+    <!-- Live Detected Presentees -->
+    <div>
+        <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 12px;">Live Recognized Presentees:</h4>
+        <div id="live-detected-list" style="display: flex; gap: 12px; flex-wrap: wrap;"></div>
+    </div>
+</div>
+
+<!-- Photo Results Section (Hidden until photo test executed) -->
 <div id="results-card" class="glass-card" style="display: none; padding: 28px; margin-bottom: 36px; border: 2px solid var(--primary);">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
         <div>
-            <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">AI Recognition Results 🎯</h2>
+            <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">Photo AI Recognition Results 🎯</h2>
             <p style="font-size: 13px; color: #94A3B8; margin: 0;" id="results-summary-text"></p>
         </div>
         
@@ -126,84 +179,39 @@
 </div>
 
 <script>
-let datasetTargets = [];
+let datasetTargets = []; // Stores { id, name, files, embedding: [512 floats] }
 let targetCounter = 0;
 let lastAnalysisResult = null;
-let selectedClassroomFiles = [];
 
-function addDatasetTarget() {
-    const nameInput = document.getElementById('target-name-input');
-    const photosInput = document.getElementById('target-photos-input');
-    const name = nameInput.value.trim();
+// Camera state
+let mediaStream = null;
+let isCameraActive = false;
+let cameraScanInterval = null;
+let liveDetectedSet = new Set();
 
-    if (!name) {
-        alert("Please enter a Student Name or Roll Number!");
-        return;
+function setTestMode(mode) {
+    const btnCam = document.getElementById('tab-mode-camera');
+    const btnPic = document.getElementById('tab-mode-photos');
+    const secCam = document.getElementById('mode-camera-sec');
+    const secPic = document.getElementById('mode-photos-sec');
+
+    if (mode === 'CAMERA') {
+        btnCam.className = 'btn btn-primary';
+        btnPic.className = 'btn btn-secondary';
+        secCam.style.display = 'block';
+        secPic.style.display = 'none';
+        document.getElementById('results-card').style.display = 'none';
+    } else {
+        btnCam.className = 'btn btn-secondary';
+        btnPic.className = 'btn btn-primary';
+        secCam.style.display = 'none';
+        secPic.style.display = 'block';
+        if (isCameraActive) stopLiveCamera();
     }
-
-    if (!photosInput.files || photosInput.files.length === 0) {
-        alert("Please select at least 1 frontal face photo for this student!");
-        return;
-    }
-
-    targetCounter++;
-    const targetObj = {
-        id: targetCounter,
-        name: name,
-        files: Array.from(photosInput.files)
-    };
-
-    datasetTargets.push(targetObj);
-
-    // Reset inputs
-    nameInput.value = '';
-    photosInput.value = '';
-
-    renderTargetsList();
-}
-
-function removeTarget(id) {
-    datasetTargets = datasetTargets.filter(t => t.id !== id);
-    renderTargetsList();
-}
-
-function renderTargetsList() {
-    const container = document.getElementById('targets-container');
-    const badge = document.getElementById('target-count-badge');
-    badge.innerText = `${datasetTargets.length} Student(s) Added`;
-
-    if (datasetTargets.length === 0) {
-        container.innerHTML = `
-            <div style="text-align: center; padding: 20px; color: #64748B; font-size: 13px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
-                No dataset students added yet. Fill out the form above to add your first target student!
-            </div>
-        `;
-        return;
-    }
-
-    container.innerHTML = '';
-    datasetTargets.forEach(t => {
-        const item = document.createElement('div');
-        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);';
-        item.innerHTML = `
-            <div>
-                <strong style="color: #F8FAFC; font-size: 14px;">${t.name}</strong>
-                <div style="font-size: 11px; color: #94A3B8;">📷 ${t.files.length} Photo(s) Attached</div>
-            </div>
-            <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; color: #EF4444;" onclick="removeTarget(${t.id})">
-                ✕ Remove
-            </button>
-        `;
-        container.appendChild(item);
-    });
 }
 
 async function resizeImageFile(file, maxDimension = 1920) {
     return new Promise((resolve) => {
-        if (file.type && file.type.startsWith('video/')) {
-            resolve(file);
-            return;
-        }
         const img = new Image();
         img.onload = () => {
             let w = img.width;
@@ -238,7 +246,287 @@ async function resizeImageFile(file, maxDimension = 1920) {
     });
 }
 
-async function runSandboxTest() {
+async function addDatasetTarget() {
+    const nameInput = document.getElementById('target-name-input');
+    const photosInput = document.getElementById('target-photos-input');
+    const addStatus = document.getElementById('add-status');
+    const name = nameInput.value.trim();
+
+    if (!name) {
+        alert("Please enter a Student Name or Roll Number!");
+        return;
+    }
+
+    if (!photosInput.files || photosInput.files.length === 0) {
+        alert("Please select at least 1 frontal face photo for this student!");
+        return;
+    }
+
+    addStatus.innerHTML = '<span style="color: var(--primary);">⌛ Extracting 512D ArcFace embedding...</span>';
+
+    try {
+        const formData = new FormData();
+        for (const file of photosInput.files) {
+            const resized = await resizeImageFile(file, 1920);
+            formData.append('photos', resized);
+        }
+
+        const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+        const response = await fetch("{% url 'api_extract_target_embedding' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            body: formData
+        });
+
+        const res = await response.json();
+
+        if (res.status === 'success' && res.embedding) {
+            targetCounter++;
+            datasetTargets.push({
+                id: targetCounter,
+                name: name,
+                files: Array.from(photosInput.files),
+                embedding: res.embedding
+            });
+
+            addStatus.innerHTML = `<span style="color: var(--success);">✓ Extracted 512D vector embedding for ${name}!</span>`;
+            nameInput.value = '';
+            photosInput.value = '';
+            renderTargetsList();
+        } else {
+            addStatus.innerHTML = `<span style="color: var(--danger);">Error: ${res.message}</span>`;
+        }
+    } catch (err) {
+        addStatus.innerHTML = `<span style="color: var(--danger);">Extraction Failed: ${err.message || err}</span>`;
+    }
+}
+
+function removeTarget(id) {
+    datasetTargets = datasetTargets.filter(t => t.id !== id);
+    renderTargetsList();
+}
+
+function renderTargetsList() {
+    const container = document.getElementById('targets-container');
+    const badge = document.getElementById('target-count-badge');
+    badge.innerText = `${datasetTargets.length} Student(s) Added`;
+
+    if (datasetTargets.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #64748B; font-size: 13px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
+                No dataset students added yet. Fill out the form above to add your first target student!
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = '';
+    datasetTargets.forEach(t => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);';
+        item.innerHTML = `
+            <div>
+                <strong style="color: #F8FAFC; font-size: 14px;">${t.name}</strong>
+                <div style="font-size: 11px; color: #10B981;">✓ 512D ArcFace Vector Ready</div>
+            </div>
+            <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; color: #EF4444;" onclick="removeTarget(${t.id})">
+                ✕ Remove
+            </button>
+        `;
+        container.appendChild(item);
+    });
+}
+
+// LIVE WEBRTC CAMERA LOGIC
+async function toggleLiveCamera() {
+    if (isCameraActive) {
+        stopLiveCamera();
+    } else {
+        await startLiveCamera();
+    }
+}
+
+async function startLiveCamera() {
+    if (datasetTargets.length === 0) {
+        alert("Please add at least 1 student to your dataset in Step 1 first!");
+        return;
+    }
+
+    const videoElem = document.getElementById('sandbox-video');
+    const cameraCard = document.getElementById('live-camera-card');
+    const toggleBtn = document.getElementById('btn-toggle-cam');
+    const statusDiv = document.getElementById('sandbox-status');
+
+    try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+            audio: false
+        });
+
+        videoElem.srcObject = mediaStream;
+        await videoElem.play();
+
+        isCameraActive = true;
+        cameraCard.style.display = 'block';
+        cameraCard.scrollIntoView({ behavior: 'smooth' });
+        toggleBtn.innerHTML = '⏹ Stop Camera Stream';
+        toggleBtn.className = 'btn btn-secondary';
+        statusDiv.innerHTML = '<span style="color: var(--success);">✓ Live Camera Streaming active! Scanning faces...</span>';
+
+        liveDetectedSet.clear();
+        renderLiveDetectedList();
+
+        // Start scanning loop every 850ms
+        if (cameraScanInterval) clearInterval(cameraScanInterval);
+        cameraScanInterval = setInterval(captureAndProcessSandboxFrame, 850);
+
+    } catch (err) {
+        alert("Webcam access failed: " + err.message);
+        statusDiv.innerHTML = `<span style="color: var(--danger);">Webcam Error: ${err.message}</span>`;
+    }
+}
+
+function stopLiveCamera() {
+    isCameraActive = false;
+    if (cameraScanInterval) clearInterval(cameraScanInterval);
+    if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+    }
+
+    const videoElem = document.getElementById('sandbox-video');
+    if (videoElem) videoElem.srcObject = null;
+
+    const cameraCard = document.getElementById('live-camera-card');
+    const toggleBtn = document.getElementById('btn-toggle-cam');
+    if (cameraCard) cameraCard.style.display = 'none';
+    if (toggleBtn) {
+        toggleBtn.innerHTML = '▶ Start Live Camera Test';
+        toggleBtn.className = 'btn btn-primary';
+    }
+
+    // Clear overlay canvas
+    const liveCanvas = document.getElementById('sandbox-video-canvas');
+    if (liveCanvas) {
+        const ctx = liveCanvas.getContext('2d');
+        ctx.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
+    }
+}
+
+async function captureAndProcessSandboxFrame() {
+    if (!isCameraActive) return;
+    const videoElem = document.getElementById('sandbox-video');
+    if (!videoElem || !videoElem.videoWidth) return;
+
+    // Capture Frame Base64
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = videoElem.videoWidth;
+    tempCanvas.height = videoElem.videoHeight;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(videoElem, 0, 0, tempCanvas.width, tempCanvas.height);
+    const frameBase64 = tempCanvas.toDataURL('image/jpeg', 0.85);
+
+    try {
+        const targetsPayload = datasetTargets.map(t => ({ name: t.name, embedding: t.embedding }));
+        const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+
+        const response = await fetch("{% url 'api_public_sandbox_frame' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                frame: frameBase64,
+                targets: targetsPayload
+            })
+        });
+
+        const res = await response.json();
+        if (res.status === 'success') {
+            drawLiveBoundingBoxes(res.faces, videoElem.videoWidth, videoElem.videoHeight);
+        }
+    } catch (err) {
+        console.error("Live frame processing error:", err);
+    }
+}
+
+function drawLiveBoundingBoxes(faces, origW, origH) {
+    const liveCanvas = document.getElementById('sandbox-video-canvas');
+    if (!liveCanvas) return;
+
+    liveCanvas.width = liveCanvas.clientWidth || origW;
+    liveCanvas.height = liveCanvas.clientHeight || origH;
+
+    const ctx = liveCanvas.getContext('2d');
+    ctx.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
+
+    const scaleX = liveCanvas.width / origW;
+    const scaleY = liveCanvas.height / origH;
+
+    faces.forEach(face => {
+        const bbox = face.bbox; // [x1, y1, x2, y2]
+        if (bbox && bbox.length === 4) {
+            // Mirror X coordinate since video has transform: scaleX(-1)
+            const rawX = bbox[0] * scaleX;
+            const y = bbox[1] * scaleY;
+            const w = (bbox[2] - bbox[0]) * scaleX;
+            const h = (bbox[3] - bbox[1]) * scaleY;
+            const x = liveCanvas.width - rawX - w;
+
+            const isMatched = face.status === 'PRESENT';
+            const strokeColor = isMatched ? '#10B981' : '#EF4444';
+
+            ctx.strokeStyle = strokeColor;
+            ctx.lineWidth = Math.max(3, Math.round(liveCanvas.width / 300));
+            ctx.strokeRect(x, y, w, h);
+
+            const studentName = face.student_name || face.roll_number || 'UNKNOWN';
+            if (isMatched && studentName !== 'UNKNOWN') {
+                liveDetectedSet.add(studentName);
+                renderLiveDetectedList();
+            }
+
+            const labelText = isMatched ? `${studentName} (${face.confidence}%)` : `UNKNOWN (${face.confidence}%)`;
+            const fontPx = Math.max(12, Math.round(liveCanvas.width / 45));
+            ctx.font = `bold ${fontPx}px Outfit, sans-serif`;
+            const textMetrics = ctx.measureText(labelText);
+            const bgWidth = textMetrics.width + 12;
+            const bgHeight = fontPx + 10;
+
+            ctx.fillStyle = strokeColor;
+            ctx.fillRect(x, Math.max(0, y - bgHeight), bgWidth, bgHeight);
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(labelText, x + 6, Math.max(fontPx, y - 6));
+        }
+    });
+}
+
+function renderLiveDetectedList() {
+    const listElem = document.getElementById('live-detected-list');
+    if (!listElem) return;
+
+    if (liveDetectedSet.size === 0) {
+        listElem.innerHTML = `<span style="font-size: 13px; color: #64748B;">No dataset students recognized yet in live camera feed...</span>`;
+        return;
+    }
+
+    listElem.innerHTML = '';
+    liveDetectedSet.forEach(name => {
+        const badge = document.createElement('div');
+        badge.className = 'badge badge-success';
+        badge.style.fontSize = '12px';
+        badge.style.padding = '6px 12px';
+        badge.innerHTML = `👤 ${name} &bull; MATCHED`;
+        listElem.appendChild(badge);
+    });
+}
+
+// MULTI-PHOTO UPLOAD TEST LOGIC
+async function runPhotoSandboxTest() {
     const classroomInput = document.getElementById('classroom-images-input');
     const statusDiv = document.getElementById('sandbox-status');
 
@@ -248,7 +536,7 @@ async function runSandboxTest() {
     }
 
     if (!classroomInput.files || classroomInput.files.length === 0) {
-        alert("Please select at least 1 classroom / group photo in Step 2!");
+        alert("Please select at least 1 classroom / group photo!");
         return;
     }
 
@@ -256,12 +544,9 @@ async function runSandboxTest() {
 
     try {
         const formData = new FormData();
-        
-        // Pass dataset metadata targets
         const targetsMeta = datasetTargets.map(t => ({ id: t.id, name: t.name }));
         formData.append('dataset_targets', JSON.stringify(targetsMeta));
 
-        // Attach photos per dataset target
         for (const t of datasetTargets) {
             for (const file of t.files) {
                 const resized = await resizeImageFile(file, 1920);
@@ -269,8 +554,7 @@ async function runSandboxTest() {
             }
         }
 
-        // Attach classroom group photos
-        selectedClassroomFiles = Array.from(classroomInput.files);
+        const selectedClassroomFiles = Array.from(classroomInput.files);
         const resizedClassroomFiles = [];
         for (const cFile of selectedClassroomFiles) {
             const resized = await resizeImageFile(cFile, 1920);
@@ -319,7 +603,6 @@ function renderAnalysisResults(result, classroomFiles) {
 
     summaryText.innerText = `Recognized ${result.unique_present_count} of ${result.dataset_count} dataset student(s) across ${result.total_photos} photo(s).`;
 
-    // Render Tabs Switcher
     tabsContainer.innerHTML = '';
     result.photos.forEach((p, idx) => {
         const btn = document.createElement('button');
@@ -332,7 +615,6 @@ function renderAnalysisResults(result, classroomFiles) {
         tabsContainer.appendChild(btn);
     });
 
-    // Render Recognized Students Grid
     recognizedList.innerHTML = '';
     if (result.unique_present_students.length === 0) {
         recognizedList.innerHTML = `<div style="grid-column: 1 / -1; color: var(--text-muted); font-size: 13px;">No dataset student matches found in the uploaded classroom images.</div>`;
@@ -350,7 +632,6 @@ function renderAnalysisResults(result, classroomFiles) {
         });
     }
 
-    // Render First Photo Canvas
     if (result.photos.length > 0) {
         switchSandboxPhotoView(0, classroomFiles[0]);
     }
@@ -362,7 +643,6 @@ function switchSandboxPhotoView(photoIndex, fileObj) {
     const canvas = document.getElementById('sandbox-canvas');
     const ctx = canvas.getContext('2d');
 
-    // Highlight tab
     const tabBtns = document.querySelectorAll('#photo-tabs-container button');
     tabBtns.forEach((btn, i) => {
         btn.className = i === photoIndex ? 'btn btn-primary' : 'btn btn-secondary';
@@ -374,7 +654,6 @@ function switchSandboxPhotoView(photoIndex, fileObj) {
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
 
-        // Draw Bounding Boxes
         photoData.faces.forEach(face => {
             const bbox = face.bbox;
             if (bbox && bbox.length === 4) {
@@ -386,12 +665,10 @@ function switchSandboxPhotoView(photoIndex, fileObj) {
                 const isMatch = face.status === 'MATCHED';
                 const strokeColor = isMatch ? '#10B981' : '#EF4444';
 
-                // Box
                 ctx.strokeStyle = strokeColor;
                 ctx.lineWidth = Math.max(3, Math.round(canvas.width / 300));
                 ctx.strokeRect(x, y, w, h);
 
-                // Text Header Tag
                 const labelText = isMatch ? `${face.student_name} (${face.confidence}%)` : `UNKNOWN (${face.confidence}%)`;
                 const fontPx = Math.max(12, Math.round(canvas.width / 45));
                 ctx.font = `bold ${fontPx}px Outfit, sans-serif`;

@@ -1,9 +1,6 @@
 import json
 import csv
 import logging
-import os
-import tempfile
-import base64
 import numpy as np
 import cv2
 from datetime import datetime, date
@@ -17,69 +14,6 @@ from .models import Subject, AttendanceSession, AttendanceEntry, StudentEmbeddin
 from .face_engine import decode_base64_image, match_faces_in_frame, extract_faces_from_image, sync_dataset_to_db
 
 logger = logging.getLogger(__name__)
-
-def extract_frames_from_file(uploaded_file, max_frames=10):
-    """
-    Given an uploaded file object (image or video), returns a list of tuples:
-    [(frame_index, bgr_image_numpy, base64_image_data_url_or_none)]
-    Supports images (.jpg, .png) and videos (.mp4, .webm, .avi, .mov, .mkv)!
-    """
-    file_name = uploaded_file.name.lower()
-    is_video = file_name.endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm')) or 'video' in getattr(uploaded_file, 'content_type', '')
-
-    if not is_video:
-        file_bytes = uploaded_file.read()
-        nparr = np.frombuffer(file_bytes, np.uint8)
-        img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img_bgr is not None:
-            return [(1, img_bgr, None)]
-        return []
-
-    # Process Video File Stream
-    frames = []
-    suffix = '.' + file_name.split('.')[-1] if '.' in file_name else '.mp4'
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        for chunk in uploaded_file.chunks():
-            tmp.write(chunk)
-        tmp_path = tmp.name
-
-    try:
-        cap = cv2.VideoCapture(tmp_path)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        if total_frames <= 0:
-            total_frames = 90
-
-        step = max(1, total_frames // max_frames)
-        frame_idx = 0
-        extracted_count = 0
-
-        while cap.isOpened() and extracted_count < max_frames:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            if frame_idx % step == 0:
-                extracted_count += 1
-                # Encode sampled frame to JPEG Base64 for frontend canvas display
-                ret_jpg, jpeg_bytes = cv2.imencode('.jpg', frame)
-                b64_url = None
-                if ret_jpg:
-                    b64_str = base64.b64encode(jpeg_bytes).decode('utf-8')
-                    b64_url = f"data:image/jpeg;base64,{b64_str}"
-
-                frames.append((extracted_count, frame, b64_url))
-            frame_idx += 1
-
-        cap.release()
-    except Exception as e:
-        logger.error(f"Error reading video file {uploaded_file.name}: {e}")
-    finally:
-        if os.path.exists(tmp_path):
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-
-    return frames
 
 @login_required
 def student_dashboard_view(request):
@@ -245,49 +179,49 @@ def api_upload_classroom_image(request):
 
         photos_results = []
         merged_students_map = {} # roll_number -> student_dict (deduplicated)
-        global_idx = 1
 
-        for img_file in image_files:
-            file_frames = extract_frames_from_file(img_file, max_frames=12)
+        for idx, img_file in enumerate(image_files, start=1):
+            file_bytes = img_file.read()
+            nparr = np.frombuffer(file_bytes, np.uint8)
+            img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-            for sub_idx, img_bgr, b64_url in file_frames:
-                matches = match_faces_in_frame(img_bgr, registered, threshold=0.38)
-                h, w = img_bgr.shape[:2]
+            if img_bgr is None:
+                continue
 
-                frame_label = f"{img_file.name} (Frame #{sub_idx})" if len(file_frames) > 1 else img_file.name
+            # Classroom photos are processed 100% in-memory without storing/saving to cloud or disk
+            matches = match_faces_in_frame(img_bgr, registered, threshold=0.38)
+            h, w = img_bgr.shape[:2]
 
-                photos_results.append({
-                    'photo_index': global_idx,
-                    'file_name': frame_label,
-                    'cloudinary_url': b64_url,
-                    'image_data_url': b64_url,
-                    'image_width': w,
-                    'image_height': h,
-                    'faces': matches,
-                    'detected_count': len(matches)
-                })
+            photos_results.append({
+                'photo_index': idx,
+                'file_name': img_file.name,
+                'cloudinary_url': None,
+                'image_width': w,
+                'image_height': h,
+                'faces': matches,
+                'detected_count': len(matches)
+            })
 
-                # Deduplicate students across multiple photos/frames
-                for face in matches:
-                    roll = face.get('roll_number')
-                    if not roll or roll == 'UNKNOWN':
-                        continue
+            # Deduplicate students across multiple photos
+            for face in matches:
+                roll = face.get('roll_number')
+                if not roll or roll == 'UNKNOWN':
+                    continue
 
-                    if roll not in merged_students_map:
-                        merged_students_map[roll] = {
-                            'roll_number': roll,
-                            'student_name': face.get('student_name', f"Student {roll}"),
-                            'confidence': face.get('confidence', 100.0),
-                            'status': 'PRESENT',
-                            'photo_appearances': [global_idx]
-                        }
-                    else:
-                        existing = merged_students_map[roll]
-                        existing['confidence'] = max(existing['confidence'], face.get('confidence', 0.0))
-                        if global_idx not in existing['photo_appearances']:
-                            existing['photo_appearances'].append(global_idx)
-
-                global_idx += 1
+                if roll not in merged_students_map:
+                    merged_students_map[roll] = {
+                        'roll_number': roll,
+                        'student_name': face.get('student_name', f"Student {roll}"),
+                        'confidence': face.get('confidence', 100.0),
+                        'status': 'PRESENT',
+                        'photo_appearances': [idx]
+                    }
+                else:
+                    # Update highest confidence and append photo appearance
+                    existing = merged_students_map[roll]
+                    existing['confidence'] = max(existing['confidence'], face.get('confidence', 0.0))
+                    if idx not in existing['photo_appearances']:
+                        existing['photo_appearances'].append(idx)
 
         unique_students_list = list(merged_students_map.values())
 
@@ -603,61 +537,60 @@ def api_public_sandbox_process(request):
                 'message': 'No valid faces detected in your dataset photos! Please ensure frontal, clear face images are provided for your dataset students.'
             }, status=400)
 
-        # Step 2: Process Classroom Group Photos & Videos against Compiled Dataset
+        # Step 2: Process Classroom Group Photos against Compiled Dataset
         photos_results = []
         unique_present_students = set()
-        global_idx = 1
 
-        for classroom_file in classroom_files:
-            file_frames = extract_frames_from_file(classroom_file, max_frames=12)
+        for idx, classroom_file in enumerate(classroom_files, start=1):
+            file_bytes = classroom_file.read()
+            nparr = np.frombuffer(file_bytes, np.uint8)
+            img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-            for sub_idx, img_bgr, b64_url in file_frames:
-                orig_h, orig_w = img_bgr.shape[:2]
-                detected_faces = extract_faces_from_image(img_bgr)
+            if img_bgr is None:
+                continue
 
-                face_annotations = []
+            orig_h, orig_w = img_bgr.shape[:2]
+            detected_faces = extract_faces_from_image(img_bgr)
 
-                for f_idx, face in enumerate(detected_faces):
-                    emb = face['embedding']
-                    best_match_name = 'UNKNOWN'
-                    best_score = 0.0
+            face_annotations = []
 
-                    for ds_item in compiled_dataset:
-                        score = cosine_similarity(emb, ds_item['embedding'])
-                        if score > best_score:
-                            best_score = score
-                            if score >= 0.45:
-                                best_match_name = ds_item['name']
+            for f_idx, face in enumerate(detected_faces):
+                emb = face['embedding']
+                best_match_name = 'UNKNOWN'
+                best_score = 0.0
 
-                    if best_match_name != 'UNKNOWN':
-                        status = 'MATCHED'
-                        unique_present_students.add(best_match_name)
-                    else:
-                        status = 'UNKNOWN'
+                for ds_item in compiled_dataset:
+                    score = cosine_similarity(emb, ds_item['embedding'])
+                    if score > best_score:
+                        best_score = score
+                        if score >= 0.45:
+                            best_match_name = ds_item['name']
 
-                    conf_pct = round(best_score * 100.0, 1)
+                if best_match_name != 'UNKNOWN':
+                    status = 'MATCHED'
+                    unique_present_students.add(best_match_name)
+                else:
+                    status = 'UNKNOWN'
 
-                    face_annotations.append({
-                        'face_index': f_idx + 1,
-                        'bbox': face['bbox'], # [x1, y1, x2, y2]
-                        'status': status,
-                        'roll_number': best_match_name,
-                        'student_name': best_match_name,
-                        'confidence': conf_pct
-                    })
+                conf_pct = round(best_score * 100.0, 1)
 
-                name_label = f"{classroom_file.name} (Frame #{sub_idx})" if len(file_frames) > 1 else classroom_file.name
-
-                photos_results.append({
-                    'photo_index': global_idx,
-                    'photo_name': name_label,
-                    'image_data_url': b64_url,
-                    'width': orig_w,
-                    'height': orig_h,
-                    'detected_count': len(detected_faces),
-                    'faces': face_annotations
+                face_annotations.append({
+                    'face_index': f_idx + 1,
+                    'bbox': face['bbox'], # [x1, y1, x2, y2]
+                    'status': status,
+                    'roll_number': best_match_name,
+                    'student_name': best_match_name,
+                    'confidence': conf_pct
                 })
-                global_idx += 1
+
+            photos_results.append({
+                'photo_index': idx,
+                'photo_name': classroom_file.name,
+                'width': orig_w,
+                'height': orig_h,
+                'detected_count': len(detected_faces),
+                'faces': face_annotations
+            })
 
         return JsonResponse({
             'status': 'success',
@@ -672,4 +605,77 @@ def api_public_sandbox_process(request):
     except Exception as e:
         logger.error(f"Public sandbox error: {e}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+def api_extract_target_embedding(request):
+    """
+    Public Sandbox API: Extracts 512D ArcFace vector embedding from uploaded reference photo(s) in-memory.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST method allowed'}, status=405)
+
+    try:
+        photo_files = request.FILES.getlist('photos') or request.FILES.getlist('photo')
+        if not photo_files:
+            return JsonResponse({'status': 'error', 'message': 'No face photo uploaded'}, status=400)
+
+        from .face_engine import extract_faces_from_image, compute_centroid_embedding
+
+        vectors = []
+        for p_file in photo_files:
+            file_bytes = p_file.read()
+            nparr = np.frombuffer(file_bytes, np.uint8)
+            img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img_bgr is not None:
+                faces = extract_faces_from_image(img_bgr)
+                if faces:
+                    vectors.append(faces[0]['embedding'])
+
+        if not vectors:
+            return JsonResponse({'status': 'error', 'message': 'No frontal face detected in uploaded reference image!'}, status=400)
+
+        centroid_vector = compute_centroid_embedding(vectors)
+        return JsonResponse({
+            'status': 'success',
+            'embedding': centroid_vector,
+            'photos_processed': len(vectors)
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+def api_public_sandbox_frame(request):
+    """
+    Public Sandbox API: Processes live WebRTC camera frame against custom dataset embeddings in-memory.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST method allowed'}, status=405)
+
+    try:
+        body = json.loads(request.body)
+        frame_base64 = body.get('frame', '')
+        targets_raw = body.get('targets', [])
+
+        if not frame_base64:
+            return JsonResponse({'status': 'error', 'message': 'No video frame provided'}, status=400)
+
+        img_bgr = decode_base64_image(frame_base64)
+        if img_bgr is None:
+            return JsonResponse({'status': 'error', 'message': 'Failed to decode image frame'}, status=400)
+
+        # Reformat targets array for match_faces_in_frame
+        registered_targets = []
+        for t in targets_raw:
+            t_name = t.get('name', 'Student')
+            t_emb = t.get('embedding', [])
+            if t_emb and len(t_emb) == 512:
+                registered_targets.append({
+                    'roll_number': t_name,
+                    'name': t_name,
+                    'embedding': t_emb
+                })
+
+        matches = match_faces_in_frame(img_bgr, registered_targets, threshold=0.38)
+        return JsonResponse({'status': 'success', 'faces': matches})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
 
