@@ -4,9 +4,16 @@
     {
       "src": "scms_project/wsgi.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "build_files.sh"
     }
   ],
   "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "/$1"
+    },
     {
       "src": "/(.*)",
       "dest": "scms_project/wsgi.py"
