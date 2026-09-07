@@ -1,0 +1,9 @@
+django==4.2.18
+whitenoise==6.8.2
+python-dotenv==1.0.1
+onnxruntime==1.23.2
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+cloudinary==1.41.0
+dj-database-url==2.3.0
+psycopg2-binary==2.9.9

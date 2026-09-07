@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+
+{% block title %}Student Dashboard - SCMS{% endblock %}
+
+{% block content %}
+<div class="top-bar">
+    <div class="page-title">
+        <h1>Welcome, {{ student_name }} 👋</h1>
+        <p>Roll No: <strong>{{ roll_number }}</strong> &bull; {{ department }}</p>
+    </div>
+    <div>
+        <span class="badge {% if attendance_percentage >= 75 %}badge-success{% else %}badge-danger{% endif %}" style="font-size: 14px; padding: 8px 16px;">
+            Overall Attendance: {{ attendance_percentage }}%
+        </span>
+    </div>
+</div>
+
+<!-- Metrics Cards -->
+<div class="metrics-grid">
+    <div class="glass-card metric-card">
+        <div class="metric-icon">📚</div>
+        <div class="metric-data">
+            <h3>{{ total_classes }}</h3>
+            <p>Total Conducted Classes</p>
+        </div>
+    </div>
+
+    <div class="glass-card metric-card">
+        <div class="metric-icon" style="color: var(--success); background: rgba(16, 185, 129, 0.1);">✅</div>
+        <div class="metric-data">
+            <h3 style="color: var(--success);">{{ present_count }}</h3>
+            <p>Classes Attended</p>
+        </div>
+    </div>
+
+    <div class="glass-card metric-card">
+        <div class="metric-icon" style="color: var(--danger); background: rgba(239, 68, 68, 0.1);">❌</div>
+        <div class="metric-data">
+            <h3 style="color: var(--danger);">{{ absent_count }}</h3>
+            <p>Classes Missed</p>
+        </div>
+    </div>
+
+    <div class="glass-card metric-card">
+        <div class="metric-icon" style="color: var(--primary); background: rgba(56, 189, 248, 0.1);">🎯</div>
+        <div class="metric-data">
+            <h3 style="color: var(--primary);">{{ attendance_percentage }}%</h3>
+            <p>Attendance Rate</p>
+        </div>
+    </div>
+</div>
+
+<!-- Subject-wise Breakdown & Progress Rings -->
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 32px;">
+    <!-- Subject Cards -->
+    <div class="glass-card">
+        <h3 style="font-size: 18px; margin-bottom: 20px;">Subject Breakdown</h3>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+            {% for sub in subjects_data %}
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 16px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <div>
+                        <strong style="font-size: 15px;">{{ sub.code }}: {{ sub.name }}</strong>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                            Attended: {{ sub.present }} / {{ sub.total }} sessions
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge {% if sub.percentage >= 75 %}badge-success{% else %}badge-danger{% endif %}">
+                            {{ sub.percentage }}%
+                        </span>
+                    </div>
+                </div>
+                <!-- Progress Bar -->
+                <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden;">
+                    <div style="width: {{ sub.percentage }}%; height: 100%; background: {% if sub.percentage >= 75 %}var(--success-gradient){% else %}linear-gradient(135deg, #EF4444 0%, #DC2626 100%){% endif %}; transition: width 0.8s ease;"></div>
+                </div>
+            </div>
+            {% empty %}
+            <p style="color: var(--text-muted);">No subject records available yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Attendance Doughnut Chart -->
+    <div class="glass-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <h3 style="font-size: 18px; margin-bottom: 16px;">Overall Ratio</h3>
+        <div style="width: 180px; height: 180px; position: relative;">
+            <canvas id="attendanceChart"></canvas>
+        </div>
+        <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
+            Required Minimum: 75.0%
+        </div>
+    </div>
+</div>
+
+<!-- History Log Table -->
+<div class="glass-card">
+    <h3 style="font-size: 18px; margin-bottom: 16px;">Recent Attendance History</h3>
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Date</th>
+                    <th>Time Slot</th>
+                    <th>Status</th>
+                    <th>Confidence Match</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in recent_entries %}
+                <tr>
+                    <td>
+                        <strong>{{ entry.session.subject.code }}</strong> - {{ entry.session.subject.name }}
+                    </td>
+                    <td>{{ entry.session.date }}</td>
+                    <td>{{ entry.session.time_slot }}</td>
+                    <td>
+                        {% if entry.status == 'PRESENT' %}
+                            <span class="badge badge-success">✓ Present</span>
+                        {% else %}
+                            <span class="badge badge-danger">✗ Absent</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ entry.confidence }}%</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                        No attendance history logged yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const ctx = document.getElementById('attendanceChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Present', 'Absent'],
+            datasets: [{
+                data: [{{ present_count }}, {{ absent_count }}],
+                backgroundColor: ['#10B981', '#EF4444'],
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            cutout: '75%',
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

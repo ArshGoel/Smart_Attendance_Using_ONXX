@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}Teacher Dashboard - SCMS{% endblock %}
+
+{% block content %}
+<div class="top-bar">
+    <div class="page-title">
+        <h1>Teacher Command Center 🎓</h1>
+        <p>Welcome, <strong>{{ teacher_name }}</strong> &bull; {{ department }}</p>
+    </div>
+    <div style="display: flex; gap: 12px;">
+        <button type="button" class="btn btn-secondary" onclick="syncDataset()">
+            🔄 Sync Dataset Embeddings
+        </button>
+        <a href="{% url 'take_attendance' %}" class="btn btn-primary">
+            📷 Start AI Live Scanner
+        </a>
+    </div>
+</div>
+
+<!-- Metrics Cards -->
+<div class="metrics-grid">
+    <div class="glass-card metric-card">
+        <div class="metric-icon">👥</div>
+        <div class="metric-data">
+            <h3>{{ total_students }}</h3>
+            <p>Enrolled Student Faces</p>
+        </div>
+    </div>
+
+    <div class="glass-card metric-card">
+        <div class="metric-icon" style="color: var(--accent); background: rgba(99, 102, 241, 0.1);">📚</div>
+        <div class="metric-data">
+            <h3 style="color: var(--accent);">{{ total_sessions }}</h3>
+            <p>Total Conducted Sessions</p>
+        </div>
+    </div>
+
+    <div class="glass-card metric-card">
+        <div class="metric-icon" style="color: var(--success); background: rgba(16, 185, 129, 0.1);">📅</div>
+        <div class="metric-data">
+            <h3 style="color: var(--success);">{{ today_sessions }}</h3>
+            <p>Today's Sessions</p>
+        </div>
+    </div>
+
+    <div class="glass-card metric-card">
+        <div class="metric-icon" style="color: var(--warning); background: rgba(245, 158, 11, 0.1);">⚡</div>
+        <div class="metric-data">
+            <h3 style="color: var(--warning);">InsightFace AI</h3>
+            <p>ONNX 512D ArcFace</p>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Sessions Table & Reports -->
+<div class="glass-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="font-size: 18px;">Recent Attendance Sessions</h3>
+        <a href="{% url 'take_attendance' %}" class="btn btn-secondary" style="font-size: 13px;">+ New Session</a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Date</th>
+                    <th>Time Slot</th>
+                    <th>Recorded Entries</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in recent_sessions %}
+                <tr>
+                    <td>
+                        <strong>{{ session.subject.code }}</strong> - {{ session.subject.name }}
+                    </td>
+                    <td>{{ session.date }}</td>
+                    <td>{{ session.time_slot }}</td>
+                    <td>
+                        <span class="badge badge-success">{{ session.entries.count }} Records</span>
+                    </td>
+                    <td>
+                        <a href="{% url 'export_attendance_csv' session.id %}" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" title="Export CSV Report">
+                            📥 Export CSV
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                        No attendance sessions logged yet. Click "Start AI Live Scanner" to record your first class!
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+async function syncDataset() {
+    if (!confirm("Start scanning dataset/ directory for student face embeddings?")) return;
+    
+    try {
+        const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+        const res = await fetch("{% url 'api_sync_dataset' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            alert(`Dataset Sync Completed! Indexed/Updated ${data.data.total} student embeddings and created ${data.data.users_created} user accounts.`);
+            window.location.reload();
+        } else {
+            alert("Error syncing dataset: " + data.message);
+        }
+    } catch(e) {
+        alert("Failed to sync dataset: " + e);
+    }
+}
+</script>
+{% endblock %}

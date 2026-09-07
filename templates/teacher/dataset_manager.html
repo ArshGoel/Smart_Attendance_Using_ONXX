@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+
+{% block title %}Cloudinary Student Dataset Manager - SCMS{% endblock %}
+
+{% block content %}
+<div class="top-bar">
+    <div class="page-title">
+        <h1>Cloudinary Student Dataset Manager ☁️</h1>
+        <p>Manage, upload & sync student face dataset photos directly to Cloudinary for 512D ArcFace AI recognition</p>
+    </div>
+    <div style="display: flex; gap: 12px;">
+        <button type="button" class="btn btn-primary" onclick="openAddStudentModal()">
+            ➕ Add / Upload Student Face
+        </button>
+        <a href="{% url 'take_attendance' %}" class="btn btn-secondary">
+            📷 Open Scanner
+        </a>
+    </div>
+</div>
+
+<!-- Upload / Update Modal Card -->
+<div id="upload-modal" class="glass-card" style="display: none; margin-bottom: 32px; border: 2px solid var(--primary); padding: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 id="modal-title" style="font-size: 18px;">Upload Student Face Photo to Cloudinary</h3>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 10px;" onclick="closeAddStudentModal()">✕ Close</button>
+    </div>
+
+    <!-- Direct HTML5 Form - No Django Forms -->
+    <form id="student-face-form" onsubmit="handleStudentFaceUpload(event)">
+        <div style="display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 16px; align-items: end;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Roll Number</label>
+                <input type="text" id="modal-roll-number" name="roll_number" class="form-input" placeholder="e.g. 228R1A0566" required>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Student Full Name</label>
+                <input type="text" id="modal-student-name" name="student_name" class="form-input" placeholder="e.g. Student 228R1A0566">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Select Frontal Face Photo</label>
+                <input type="file" id="modal-photo-file" name="student_photo" class="form-input" accept="image/*" required>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+            <div id="modal-status" style="font-size: 13px; font-weight: 600;"></div>
+            <button type="submit" class="btn btn-primary" style="padding: 12px 24px;">
+                ☁️ Upload to Cloudinary & Extract 512D Vector
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Student Dataset Grid Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px;">
+    {% for student in students %}
+    <div class="glass-card interactive" style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 20px;">
+        <!-- Avatar Preview (Cloudinary URL or Avatar) -->
+        <div style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; margin-bottom: 12px; border: 2px solid var(--border-glow); background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center;">
+            {% if student.image_url %}
+                <img src="{{ student.image_url }}" alt="{{ student.roll_number }}" style="width: 100%; height: 100%; object-fit: cover;">
+            {% else %}
+                <span style="font-size: 28px; font-weight: bold; color: var(--primary);">{{ student.roll_number|slice:":2" }}</span>
+            {% endif %}
+        </div>
+
+        <h3 style="font-size: 16px; margin-bottom: 4px;">{{ student.roll_number }}</h3>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">{{ student.student_name|default:"Registered Student" }}</p>
+
+        <div>
+            {% if student.image_url %}
+                <span class="badge badge-success" style="font-size: 11px;">✓ Cloudinary Synced</span>
+            {% else %}
+                <span class="badge badge-warning" style="font-size: 11px;">DB Embed Saved</span>
+            {% endif %}
+        </div>
+
+        <button type="button" class="btn btn-secondary" style="margin-top: 16px; width: 100%; font-size: 12px;" onclick="editStudentPhoto('{{ student.roll_number }}', '{{ student.student_name }}')">
+            📷 Update Face Photo
+        </button>
+    </div>
+    {% empty %}
+    <div class="glass-card" style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
+        No student faces enrolled yet. Click "Add / Upload Student Face" to add your first student to Cloudinary!
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function openAddStudentModal() {
+    document.getElementById('upload-modal').style.display = 'block';
+    document.getElementById('modal-title').innerText = 'Upload Student Face Photo to Cloudinary';
+    document.getElementById('modal-roll-number').value = '';
+    document.getElementById('modal-student-name').value = '';
+    document.getElementById('modal-status').innerHTML = '';
+    document.getElementById('upload-modal').scrollIntoView({ behavior: 'smooth' });
+}
+
+function closeAddStudentModal() {
+    document.getElementById('upload-modal').style.display = 'none';
+}
+
+function editStudentPhoto(rollNumber, name) {
+    document.getElementById('upload-modal').style.display = 'block';
+    document.getElementById('modal-title').innerText = `Update Cloudinary Photo for ${rollNumber}`;
+    document.getElementById('modal-roll-number').value = rollNumber;
+    document.getElementById('modal-student-name').value = name || '';
+    document.getElementById('modal-status').innerHTML = '';
+    document.getElementById('upload-modal').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function handleStudentFaceUpload(e) {
+    e.preventDefault();
+    const form = document.getElementById('student-face-form');
+    const formData = new FormData(form);
+    const statusDiv = document.getElementById('modal-status');
+
+    statusDiv.innerHTML = '<span style="color: var(--primary);">⌛ Uploading image to Cloudinary & computing 512D ArcFace vector...</span>';
+
+    try {
+        const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+        const response = await fetch("{% url 'api_upload_student_face' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            body: formData
+        });
+
+        const res = await response.json();
+        if (res.status === 'success') {
+            statusDiv.innerHTML = `<span style="color: var(--success);">✓ ${res.message}</span>`;
+            setTimeout(() => window.location.reload(), 1200);
+        } else {
+            statusDiv.innerHTML = `<span style="color: var(--danger);">Error: ${res.message}</span>`;
+        }
+    } catch (err) {
+        statusDiv.innerHTML = `<span style="color: var(--danger);">Upload failed: ${err}</span>`;
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}AI Multi-Photo Attendance & Scanner - SCMS{% endblock %}
+
+{% block content %}
+<div class="top-bar">
+    <div class="page-title">
+        <h1>Classroom AI Attendance Scanner 📷</h1>
+        <p>Analyze single or multiple classroom group photos with Cloudinary backup & deduplication</p>
+    </div>
+    <div>
+        <a href="{% url 'teacher_dashboard' %}" class="btn btn-secondary">← Back to Overview</a>
+    </div>
+</div>
+
+<!-- Session Control Bar -->
+<div class="glass-card" style="margin-bottom: 24px;">
+    <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 16px; align-items: end;">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Subject / Class</label>
+            <select id="subject-select" class="form-select">
+                {% for sub in subjects %}
+                    <option value="{{ sub.id }}">{{ sub.code }} - {{ sub.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Date</label>
+            <input type="date" id="session-date" class="form-input" value="{{ today_date }}">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Time Slot</label>
+            <select id="time-slot" class="form-select">
+                <option value="09:30 AM - 10:30 AM">09:30 AM - 10:30 AM</option>
+                <option value="10:30 AM - 11:30 AM">10:30 AM - 11:30 AM</option>
+                <option value="11:30 AM - 12:30 PM">11:30 AM - 12:30 PM</option>
+                <option value="01:30 PM - 02:30 PM">01:30 PM - 02:30 PM</option>
+                <option value="02:30 PM - 03:30 PM">02:30 PM - 03:30 PM</option>
+            </select>
+        </div>
+
+        <div>
+            <button type="button" id="btn-toggle-cam" class="btn btn-primary" style="width: 100%;" onclick="toggleScanner()">
+                ▶ Live Camera
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Multiple Classroom Photos Dropzone Card -->
+<div class="glass-card" style="margin-bottom: 24px; padding: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+        <div>
+            <h3 style="font-size: 16px; margin-bottom: 4px;">🖼️ Upload Classroom Group Photos (Supports Multiple Images)</h3>
+            <p style="color: var(--text-muted); font-size: 13px;">Upload 1 or more classroom photos. Deduplicates present students automatically across all images!</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <input type="file" id="classroom-images-input" accept="image/*" multiple style="display: none;" onchange="uploadMultipleClassroomPhotos(this)">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('classroom-images-input').click()">
+                📤 Upload Photo(s) to Cloudinary
+            </button>
+        </div>
+    </div>
+
+    <!-- Photo Tabs Container for Multi-Image Switcher -->
+    <div id="photo-tabs-container" style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;"></div>
+    <div id="upload-status" style="margin-top: 12px; font-size: 13px; font-weight: 600;"></div>
+</div>
+
+<!-- Scanner & Analyzer Split View -->
+<div class="scanner-grid">
+    <!-- Viewfinder / Canvas Display -->
+    <div class="glass-card" style="display: flex; flex-direction: column; align-items: center;">
+        <div class="webcam-container" style="min-height: 380px;">
+            <video id="webcam-video" autoplay playsinline muted></video>
+            <canvas id="output-canvas"></canvas>
+        </div>
+        <div style="margin-top: 16px; font-size: 13px; color: var(--text-muted); text-align: center;">
+            💡 Detected face bounding boxes with matched Roll Numbers will be highlighted automatically.
+        </div>
+    </div>
+
+    <!-- Detected Students Sidebar -->
+    <div class="glass-card" style="display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
+            <h3 style="font-size: 16px;">Unique Presentees (<span id="detected-count">0</span>)</h3>
+            <span class="badge badge-success" style="font-size: 11px;">Deduplicated</span>
+        </div>
+
+        <div id="detected-list-container" class="detected-list" style="flex: 1;">
+            <p style="color: var(--text-muted); text-align: center; margin-top: 40px;">
+                Start the live camera or upload classroom photo(s) to detect present students...
+            </p>
+        </div>
+
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+            <button type="button" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 15px;" onclick="saveCurrentSession()">
+                💾 Save Attendance Session
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/scanner.js' %}"></script>
+<script>
+let scanner = null;
+
+document.addEventListener("DOMContentLoaded", function() {
+    scanner = new AttendanceScanner(
+        'webcam-video',
+        'output-canvas',
+        "{% url 'api_process_frame' %}",
+        "{% url 'api_save_session' %}",
+        "{% url 'api_upload_classroom_image' %}"
+    );
+    window.scannerInstance = scanner;
+});
+
+async function toggleScanner() {
+    const btn = document.getElementById('btn-toggle-cam');
+    if (!scanner.isScanning) {
+        const success = await scanner.startCamera();
+        if (success) {
+            btn.innerHTML = '⏹ Stop Camera';
+            btn.className = 'btn btn-secondary';
+        }
+    } else {
+        scanner.stopCamera();
+        btn.innerHTML = '▶ Live Camera';
+        btn.className = 'btn btn-primary';
+    }
+}
+
+function uploadMultipleClassroomPhotos(fileInput) {
+    scanner.processMultipleUploadedImages(fileInput);
+}
+
+function saveCurrentSession() {
+    const subjectId = document.getElementById('subject-select').value;
+    const dateStr = document.getElementById('session-date').value;
+    const timeSlot = document.getElementById('time-slot').value;
+    scanner.saveSession(subjectId, dateStr, timeSlot);
+}
+</script>
+{% endblock %}

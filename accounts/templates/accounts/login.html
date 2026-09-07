@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - Smart Classroom Management System{% endblock %}
+
+{% block content %}
+<div style="display: flex; align-items: center; justify-content: center; min-height: 80vh; width: 100%;">
+    <div class="glass-card pulse-glow" style="width: 100%; max-width: 440px; padding: 40px;">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <div class="brand-icon" style="width: 56px; height: 56px; margin: 0 auto 16px auto; font-size: 28px;">⚡</div>
+            <h1 style="font-size: 24px; margin-bottom: 6px;">Welcome to SCMS</h1>
+            <p style="color: var(--text-muted); font-size: 14px;">Smart Classroom Attendance Management System</p>
+        </div>
+
+        {% if error_message %}
+            <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 20px; color: #F87171; font-size: 14px; text-align: center;">
+                {{ error_message }}
+            </div>
+        {% endif %}
+
+        <!-- NO DJANGO FORMS - Direct HTML5 Form -->
+        <form method="POST" action="{% url 'login' %}">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label class="form-label">I am a</label>
+                <select name="role" class="form-select" id="role-select" onchange="updatePlaceholder()">
+                    <option value="STUDENT" selected>Student (View Portal)</option>
+                    <option value="TEACHER">Teacher (Admin/Scanner Portal)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" id="username-label">Roll Number / Username</label>
+                <input type="text" name="username" class="form-input" id="username-input" placeholder="e.g. 228R1A0566" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" name="password" class="form-input" placeholder="Enter your password" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 16px; margin-top: 10px;">
+                Log In to Portal 🚀
+            </button>
+        </form>
+
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--text-muted); text-align: center;">
+            <p style="margin-bottom: 6px;">💡 <strong>Demo Credentials:</strong></p>
+            <p><strong>Teacher:</strong> Username: <code>teacher</code> | Password: <code>teacher123</code></p>
+            <p><strong>Student:</strong> Username: <code>228r1a0566</code> | Password: <code>student123</code></p>
+        </div>
+    </div>
+</div>
+
+<script>
+function updatePlaceholder() {
+    const role = document.getElementById('role-select').value;
+    const label = document.getElementById('username-label');
+    const input = document.getElementById('username-input');
+    if (role === 'TEACHER') {
+        label.innerText = 'Teacher Username / ID';
+        input.placeholder = 'e.g. teacher';
+    } else {
+        label.innerText = 'Roll Number / Username';
+        input.placeholder = 'e.g. 228R1A0566';
+    }
+}
+</script>
+{% endblock %}
