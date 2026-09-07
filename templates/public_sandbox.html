@@ -77,17 +77,17 @@
             <div style="margin-bottom: 16px;">
                 <h3 style="font-size: 17px; font-weight: 700; color: #F8FAFC; display: flex; align-items: center; gap: 8px;">
                     <span style="background: #10B981; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px;">2</span>
-                    Upload Classroom Group Photos
+                    Upload Classroom Group Photo(s) or Video 🎬
                 </h3>
             </div>
 
             <p style="font-size: 13px; color: #94A3B8; margin-bottom: 20px;">
-                Upload 1 or multiple classroom/group photos where your dataset students appear.
+                Upload 1 or multiple classroom photos <strong>OR video files</strong> (.mp4, .webm, .mov) where your dataset students appear.
             </p>
 
             <div class="form-group">
-                <label class="form-label">Select Classroom / Group Image(s)</label>
-                <input type="file" id="classroom-images-input" class="form-input" accept="image/*" multiple style="padding: 12px;">
+                <label class="form-label">Select Group Photo(s) or Video File (.mp4, .webm, .mov)</label>
+                <input type="file" id="classroom-images-input" class="form-input" accept="image/*,video/*" multiple style="padding: 12px;">
             </div>
         </div>
 
@@ -200,6 +200,10 @@ function renderTargetsList() {
 
 async function resizeImageFile(file, maxDimension = 1920) {
     return new Promise((resolve) => {
+        if (file.type && file.type.startsWith('video/')) {
+            resolve(file);
+            return;
+        }
         const img = new Image();
         img.onload = () => {
             let w = img.width;

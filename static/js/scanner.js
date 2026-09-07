@@ -111,6 +111,10 @@ class AttendanceScanner {
 
     async resizeImageFile(file, maxDimension = 1920) {
         return new Promise((resolve) => {
+            if (file.type && file.type.startsWith('video/')) {
+                resolve(file);
+                return;
+            }
             const img = new Image();
             img.onload = () => {
                 let w = img.width;

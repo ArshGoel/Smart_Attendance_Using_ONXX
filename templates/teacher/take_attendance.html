@@ -54,13 +54,13 @@
 <div class="glass-card" style="margin-bottom: 24px; padding: 20px;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
         <div>
-            <h3 style="font-size: 16px; margin-bottom: 4px;">🖼️ Upload Classroom Group Photos (Supports Multiple Images)</h3>
-            <p style="color: var(--text-muted); font-size: 13px;">Upload 1 or more classroom photos. Deduplicates present students automatically across all images!</p>
+            <h3 style="font-size: 16px; margin-bottom: 4px;">🎬 Upload Classroom Group Photos or Video (.mp4, .webm, .mov)</h3>
+            <p style="color: var(--text-muted); font-size: 13px;">Upload classroom photos or video clips. Detects & deduplicates present students automatically!</p>
         </div>
         <div style="display: flex; align-items: center; gap: 12px;">
-            <input type="file" id="classroom-images-input" accept="image/*" multiple style="display: none;" onchange="uploadMultipleClassroomPhotos(this)">
+            <input type="file" id="classroom-images-input" accept="image/*,video/*" multiple style="display: none;" onchange="uploadMultipleClassroomPhotos(this)">
             <button type="button" class="btn btn-secondary" onclick="document.getElementById('classroom-images-input').click()">
-                📤 Upload Photo(s) to Cloudinary
+                📤 Upload Photo(s) or Video
             </button>
         </div>
     </div>
