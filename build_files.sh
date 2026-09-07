@@ -12,4 +12,4 @@ echo "Collecting static files..."
 python3 manage.py collectstatic --noinput --clear
 
 # Guarantee that the output directory exists
-mkdir -p staticfiles
+mkdir -p staticfiles_build
