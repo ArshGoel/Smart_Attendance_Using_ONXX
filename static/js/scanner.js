@@ -93,7 +93,14 @@ class AttendanceScanner {
                 body: JSON.stringify({ frame: frameData })
             });
 
-            const result = await response.json();
+            const rawText = await response.text();
+            let result;
+            try {
+                result = JSON.parse(rawText);
+            } catch (e) {
+                return;
+            }
+
             if (result.status === 'success') {
                 this.renderDetectedFacesOnCanvas(result.faces, this.video.videoWidth || 640, this.video.videoHeight || 480);
             }
@@ -102,9 +109,45 @@ class AttendanceScanner {
         }
     }
 
+    async resizeImageFile(file, maxDimension = 1920) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                let w = img.width;
+                let h = img.height;
+                if (w <= maxDimension && h <= maxDimension) {
+                    resolve(file);
+                    return;
+                }
+                if (w > h) {
+                    h = Math.round((h * maxDimension) / w);
+                    w = maxDimension;
+                } else {
+                    w = Math.round((w * maxDimension) / h);
+                    h = maxDimension;
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const resizedFile = new File([blob], file.name, { type: file.type || 'image/jpeg' });
+                        resolve(resizedFile);
+                    } else {
+                        resolve(file);
+                    }
+                }, file.type || 'image/jpeg', 0.90);
+            };
+            img.onerror = () => resolve(file);
+            img.src = URL.createObjectURL(file);
+        });
+    }
+
     async processMultipleUploadedImages(fileInput) {
         if (!fileInput.files || fileInput.files.length === 0) return;
-        const files = Array.from(fileInput.files);
+        const rawFiles = Array.from(fileInput.files);
 
         // Stop camera if active
         if (this.isScanning) {
@@ -116,18 +159,25 @@ class AttendanceScanner {
             }
         }
 
-        const formData = new FormData();
-        files.forEach(file => {
-            formData.append('classroom_images', file);
-        });
-
         const statusDiv = document.getElementById('upload-status');
         const tabsContainer = document.getElementById('photo-tabs-container');
         if (statusDiv) {
-            statusDiv.innerHTML = `<span style="color: var(--primary);">⌛ Processing & uploading ${files.length} classroom photo(s) to Cloudinary...</span>`;
+            statusDiv.innerHTML = `<span style="color: var(--primary);">⌛ Optimizing & uploading ${rawFiles.length} classroom photo(s) to Cloudinary...</span>`;
         }
 
         try {
+            // Resize images on client before uploading
+            const resizedFiles = [];
+            for (const f of rawFiles) {
+                const rf = await this.resizeImageFile(f, 1920);
+                resizedFiles.push(rf);
+            }
+
+            const formData = new FormData();
+            resizedFiles.forEach(file => {
+                formData.append('classroom_images', file);
+            });
+
             const csrfToken = this.getCsrfToken();
             const response = await fetch(this.uploadUrl, {
                 method: 'POST',
@@ -137,7 +187,17 @@ class AttendanceScanner {
                 body: formData
             });
 
-            const result = await response.json();
+            const rawText = await response.text();
+            let result;
+            try {
+                result = JSON.parse(rawText);
+            } catch (parseErr) {
+                if (response.status === 413 || rawText.includes("Too Large")) {
+                    throw new Error("Uploaded photo payload is too large. Please select smaller images or upload 1-2 photos at a time.");
+                }
+                throw new Error(rawText.substring(0, 150) || `Server error (${response.status})`);
+            }
+
             if (result.status === 'success') {
                 if (this.video) this.video.style.display = 'none';
 
@@ -167,14 +227,14 @@ class AttendanceScanner {
                         btn.style.fontSize = '12px';
                         btn.style.padding = '6px 12px';
                         btn.innerHTML = `Photo #${p.photo_index} (${p.detected_count} Faces)`;
-                        btn.onclick = () => this.switchPhotoCanvasView(idx, files[idx]);
+                        btn.onclick = () => this.switchPhotoCanvasView(idx, resizedFiles[idx]);
                         tabsContainer.appendChild(btn);
                     });
                 }
 
                 // Render first photo canvas
-                if (this.uploadedPhotos.length > 0 && files[0]) {
-                    this.switchPhotoCanvasView(0, files[0]);
+                if (this.uploadedPhotos.length > 0 && resizedFiles[0]) {
+                    this.switchPhotoCanvasView(0, resizedFiles[0]);
                 }
 
                 if (statusDiv) {
@@ -188,7 +248,7 @@ class AttendanceScanner {
         } catch (err) {
             console.error("Multiple classroom image upload error:", err);
             if (statusDiv) {
-                statusDiv.innerHTML = `<span style="color: var(--danger);">Upload failed: ${err}</span>`;
+                statusDiv.innerHTML = `<span style="color: var(--danger);">Upload failed: ${err.message || err}</span>`;
             }
         }
     }
@@ -345,7 +405,14 @@ class AttendanceScanner {
                 })
             });
 
-            const res = await response.json();
+            const rawText = await response.text();
+            let res;
+            try {
+                res = JSON.parse(rawText);
+            } catch(e) {
+                throw new Error(rawText.substring(0, 150) || `Server error (${response.status})`);
+            }
+
             if (res.status === 'success') {
                 alert("Attendance session saved successfully to online database!");
                 window.location.href = '/teacher/dashboard/';
@@ -353,7 +420,7 @@ class AttendanceScanner {
                 alert("Error saving session: " + res.message);
             }
         } catch (e) {
-            alert("Network error while saving session: " + e);
+            alert("Network error while saving session: " + (e.message || e));
         }
     }
 

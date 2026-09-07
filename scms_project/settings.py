@@ -119,5 +119,6 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
-# Max Payload Size for AJAX base64 face frames
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760
+# Max Payload & File Upload Size for multi-photo analysis (100MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600
+FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600

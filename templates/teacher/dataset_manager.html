@@ -113,15 +113,63 @@ function editStudentPhoto(rollNumber, name) {
     document.getElementById('upload-modal').scrollIntoView({ behavior: 'smooth' });
 }
 
+async function resizeImageFile(file, maxDimension = 1920) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            let w = img.width;
+            let h = img.height;
+            if (w <= maxDimension && h <= maxDimension) {
+                resolve(file);
+                return;
+            }
+            if (w > h) {
+                h = Math.round((h * maxDimension) / w);
+                w = maxDimension;
+            } else {
+                w = Math.round((w * maxDimension) / h);
+                h = maxDimension;
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    const resizedFile = new File([blob], file.name, { type: file.type || 'image/jpeg' });
+                    resolve(resizedFile);
+                } else {
+                    resolve(file);
+                }
+            }, file.type || 'image/jpeg', 0.90);
+        };
+        img.onerror = () => resolve(file);
+        img.src = URL.createObjectURL(file);
+    });
+}
+
 async function handleStudentFaceUpload(e) {
     e.preventDefault();
-    const form = document.getElementById('student-face-form');
-    const formData = new FormData(form);
     const statusDiv = document.getElementById('modal-status');
+    const rollNumber = document.getElementById('modal-roll-number').value.trim();
+    const studentName = document.getElementById('modal-student-name').value.trim();
+    const fileInput = document.getElementById('modal-photo-file');
 
-    statusDiv.innerHTML = '<span style="color: var(--primary);">⌛ Uploading image to Cloudinary & computing 512D ArcFace vector...</span>';
+    statusDiv.innerHTML = '<span style="color: var(--primary);">⌛ Optimizing & uploading photo(s) to Cloudinary...</span>';
 
     try {
+        const formData = new FormData();
+        formData.append('roll_number', rollNumber);
+        formData.append('student_name', studentName);
+
+        if (fileInput.files && fileInput.files.length > 0) {
+            for (const file of fileInput.files) {
+                const resizedFile = await resizeImageFile(file, 1920);
+                formData.append('student_photos', resizedFile);
+            }
+        }
+
         const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
         const response = await fetch("{% url 'api_upload_student_face' %}", {
             method: 'POST',
@@ -131,7 +179,17 @@ async function handleStudentFaceUpload(e) {
             body: formData
         });
 
-        const res = await response.json();
+        const rawText = await response.text();
+        let res;
+        try {
+            res = JSON.parse(rawText);
+        } catch (jsonErr) {
+            if (response.status === 413 || rawText.includes("Too Large") || rawText.includes("Request En")) {
+                throw new Error("Uploaded photo payload is too large for server limits. Image was automatically compressed, please select fewer/smaller images.");
+            }
+            throw new Error(rawText.substring(0, 150) || `Server error status ${response.status}`);
+        }
+
         if (res.status === 'success') {
             statusDiv.innerHTML = `<span style="color: var(--success);">✓ ${res.message}</span>`;
             setTimeout(() => window.location.reload(), 1200);
@@ -139,7 +197,7 @@ async function handleStudentFaceUpload(e) {
             statusDiv.innerHTML = `<span style="color: var(--danger);">Error: ${res.message}</span>`;
         }
     } catch (err) {
-        statusDiv.innerHTML = `<span style="color: var(--danger);">Upload failed: ${err}</span>`;
+        statusDiv.innerHTML = `<span style="color: var(--danger);">Upload failed: ${err.message || err}</span>`;
     }
 }
 </script>
