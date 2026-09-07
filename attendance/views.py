@@ -188,24 +188,14 @@ def api_upload_classroom_image(request):
             if img_bgr is None:
                 continue
 
-            # Upload photo to Cloudinary if configured
-            cloudinary_url = None
-            if getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
-                try:
-                    import cloudinary.uploader
-                    img_file.seek(0)
-                    upload_res = cloudinary.uploader.upload(img_file, folder="scms_classroom_photos")
-                    cloudinary_url = upload_res.get('secure_url')
-                except Exception as e:
-                    logger.error(f"Cloudinary upload failed for photo #{idx}: {e}")
-
+            # Classroom photos are processed 100% in-memory without storing/saving to cloud or disk
             matches = match_faces_in_frame(img_bgr, registered, threshold=0.38)
             h, w = img_bgr.shape[:2]
 
             photos_results.append({
                 'photo_index': idx,
                 'file_name': img_file.name,
-                'cloudinary_url': cloudinary_url,
+                'cloudinary_url': None,
                 'image_width': w,
                 'image_height': h,
                 'faces': matches,
@@ -249,8 +239,9 @@ def api_upload_classroom_image(request):
 def api_upload_student_face(request):
     """
     Teacher Dataset Manager endpoint:
-    Accepts single or MULTIPLE face photos for a student, uploads to Cloudinary,
-    extracts 512D ArcFace vectors across all images, computes centroid embedding vector, and updates DB!
+    Accepts single or MULTIPLE face photos for a student.
+    Extracts 512D ArcFace vectors across all images in-memory, computes centroid vector, and saves embedding to DB.
+    Stores ONLY the single 1st image as profile avatar thumbnail (scms_profile_photos) for UI display.
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
@@ -263,8 +254,9 @@ def api_upload_student_face(request):
         return JsonResponse({'status': 'error', 'message': 'Roll Number and Student Photo(s) are required'}, status=400)
 
     try:
-        cloudinary_urls = []
+        profile_image_url = None
         extracted_vectors = []
+
         for idx, photo_file in enumerate(photo_files, start=1):
             file_bytes = photo_file.read()
             nparr = np.frombuffer(file_bytes, np.uint8)
@@ -273,28 +265,25 @@ def api_upload_student_face(request):
             if img_bgr is None:
                 continue
 
-            # Upload photo to Cloudinary under scms_student_dataset/<roll_number>/
-            if getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
+            # Upload ONLY the 1st photo as the student's Profile Avatar Thumbnail for UI display
+            if idx == 1 and getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
                 try:
                     import cloudinary.uploader
                     photo_file.seek(0)
                     res = cloudinary.uploader.upload(
                         photo_file,
-                        public_id=f"{roll_number}_photo_{idx}",
-                        folder=f"scms_student_dataset/{roll_number}",
+                        public_id=f"{roll_number}_profile",
+                        folder="scms_profile_photos",
                         overwrite=True
                     )
-                    cloud_url = res.get('secure_url')
-                    if cloud_url:
-                        cloudinary_urls.append(cloud_url)
+                    profile_image_url = res.get('secure_url')
                 except Exception as e:
-                    logger.error(f"Cloudinary dataset photo upload error for {roll_number} (#{idx}): {e}")
+                    logger.error(f"Cloudinary profile avatar upload error for {roll_number}: {e}")
 
+            # Extract 512D face vector in memory
             faces = extract_faces_from_image(img_bgr)
             if faces:
                 extracted_vectors.append(faces[0]['embedding'])
-
-        primary_cloudinary_url = cloudinary_urls[0] if cloudinary_urls else None
 
         if not extracted_vectors:
             return JsonResponse({'status': 'error', 'message': 'No face detected in uploaded photo(s)! Please upload clear frontal face images.'}, status=400)
@@ -308,14 +297,14 @@ def api_upload_student_face(request):
             roll_number=roll_number,
             defaults={
                 'student_name': student_name or f"Student {roll_number}",
-                'image_url': primary_cloudinary_url or ''
+                'image_url': profile_image_url or ''
             }
         )
         record.set_embedding(final_embedding)
         if student_name:
             record.student_name = student_name
-        if primary_cloudinary_url:
-            record.image_url = primary_cloudinary_url
+        if profile_image_url:
+            record.image_url = profile_image_url
         record.save()
 
         # Ensure User & UserProfile exist
@@ -345,9 +334,9 @@ def api_upload_student_face(request):
             'status': 'success',
             'roll_number': roll_number,
             'student_name': record.student_name,
-            'image_url': primary_cloudinary_url,
+            'image_url': profile_image_url,
             'photos_processed': len(extracted_vectors),
-            'message': f"Enrolled {len(extracted_vectors)} photo(s) for {roll_number}! 512D Centroid Vector uploaded to Cloudinary & Database."
+            'message': f"Enrolled {len(extracted_vectors)} photo(s) for {roll_number}! 512D Centroid Vector saved to DB. Profile avatar updated."
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
@@ -481,3 +470,139 @@ def export_attendance_csv(request, session_id):
         ])
 
     return response
+
+def public_sandbox_view(request):
+    """
+    Zero-Login Public AI Dataset & Testing Sandbox Page:
+    Allows any guest/evaluator to build a custom dataset in memory and test multi-photo recognition instantly.
+    """
+    return render(request, 'public_sandbox.html')
+
+def api_public_sandbox_process(request):
+    """
+    API endpoint for Zero-Login Public Sandbox:
+    Processes custom dataset targets (in-memory) and classroom group photos,
+    extracting 512D ArcFace vectors and matching faces with 0 database/cloud storage dependency!
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST method allowed'}, status=405)
+
+    try:
+        import json
+        targets_raw = request.POST.get('dataset_targets', '[]')
+        try:
+            targets_list = json.loads(targets_raw)
+        except Exception:
+            targets_list = []
+
+        classroom_files = request.FILES.getlist('classroom_images') or request.FILES.getlist('classroom_image')
+
+        if not targets_list:
+            return JsonResponse({'status': 'error', 'message': 'Please add at least 1 student to your custom dataset in Step 1.'}, status=400)
+
+        if not classroom_files:
+            return JsonResponse({'status': 'error', 'message': 'Please select at least 1 classroom/group photo to analyze in Step 2.'}, status=400)
+
+        from .face_engine import extract_faces_from_image, compute_centroid_embedding, cosine_similarity
+
+        # Step 1: Process Custom Dataset Targets into 512D Vectors (in memory)
+        compiled_dataset = []
+        for target in targets_list:
+            t_id = target.get('id')
+            t_name = target.get('name', '').strip() or f"Student #{t_id}"
+            photo_key = f"target_photos_{t_id}"
+            target_files = request.FILES.getlist(photo_key)
+
+            target_vectors = []
+            for t_file in target_files:
+                file_bytes = t_file.read()
+                nparr = np.frombuffer(file_bytes, np.uint8)
+                img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if img_bgr is not None:
+                    faces = extract_faces_from_image(img_bgr)
+                    if faces:
+                        target_vectors.append(faces[0]['embedding'])
+
+            if target_vectors:
+                centroid_vec = compute_centroid_embedding(target_vectors)
+                compiled_dataset.append({
+                    'id': t_id,
+                    'name': t_name,
+                    'embedding': centroid_vec
+                })
+
+        if not compiled_dataset:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No valid faces detected in your dataset photos! Please ensure frontal, clear face images are provided for your dataset students.'
+            }, status=400)
+
+        # Step 2: Process Classroom Group Photos against Compiled Dataset
+        photos_results = []
+        unique_present_students = set()
+
+        for idx, classroom_file in enumerate(classroom_files, start=1):
+            file_bytes = classroom_file.read()
+            nparr = np.frombuffer(file_bytes, np.uint8)
+            img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if img_bgr is None:
+                continue
+
+            orig_h, orig_w = img_bgr.shape[:2]
+            detected_faces = extract_faces_from_image(img_bgr)
+
+            face_annotations = []
+
+            for f_idx, face in enumerate(detected_faces):
+                emb = face['embedding']
+                best_match_name = 'UNKNOWN'
+                best_score = 0.0
+
+                for ds_item in compiled_dataset:
+                    score = cosine_similarity(emb, ds_item['embedding'])
+                    if score > best_score:
+                        best_score = score
+                        if score >= 0.45:
+                            best_match_name = ds_item['name']
+
+                if best_match_name != 'UNKNOWN':
+                    status = 'MATCHED'
+                    unique_present_students.add(best_match_name)
+                else:
+                    status = 'UNKNOWN'
+
+                conf_pct = round(best_score * 100.0, 1)
+
+                face_annotations.append({
+                    'face_index': f_idx + 1,
+                    'bbox': face['bbox'], # [x1, y1, x2, y2]
+                    'status': status,
+                    'roll_number': best_match_name,
+                    'student_name': best_match_name,
+                    'confidence': conf_pct
+                })
+
+            photos_results.append({
+                'photo_index': idx,
+                'photo_name': classroom_file.name,
+                'width': orig_w,
+                'height': orig_h,
+                'detected_count': len(detected_faces),
+                'faces': face_annotations
+            })
+
+        return JsonResponse({
+            'status': 'success',
+            'dataset_count': len(compiled_dataset),
+            'total_photos': len(photos_results),
+            'unique_present_count': len(unique_present_students),
+            'unique_present_students': list(unique_present_students),
+            'photos': photos_results,
+            'message': f"Analysis Complete! Recognized {len(unique_present_students)} unique dataset student(s) across {len(photos_results)} classroom image(s)."
+        })
+
+    except Exception as e:
+        logger.error(f"Public sandbox error: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+

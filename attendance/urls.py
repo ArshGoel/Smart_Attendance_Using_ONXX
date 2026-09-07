@@ -9,6 +9,10 @@ urlpatterns = [
     path('teacher/students/', views.student_list_view, name='student_list'),
     path('export-csv/<int:session_id>/', views.export_attendance_csv, name='export_attendance_csv'),
     
+    # Zero-Login Public Sandbox Playground
+    path('sandbox/', views.public_sandbox_view, name='public_sandbox'),
+    path('api/public-sandbox-process/', views.api_public_sandbox_process, name='api_public_sandbox_process'),
+
     # API Endpoints (No Django forms)
     path('api/process-frame/', views.api_process_frame, name='api_process_frame'),
     path('api/upload-classroom-image/', views.api_upload_classroom_image, name='api_upload_classroom_image'),

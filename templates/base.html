@@ -46,6 +46,9 @@
                 <li class="nav-item {% if request.resolver_match.url_name == 'home' %}active{% endif %}">
                     <a href="{% url 'home' %}">🏠 Home Landing</a>
                 </li>
+                <li class="nav-item {% if request.resolver_match.url_name == 'public_sandbox' %}active{% endif %}">
+                    <a href="{% url 'public_sandbox' %}">🧪 AI Testing Sandbox</a>
+                </li>
                 {% if user.profile.is_teacher %}
                     <li class="nav-item {% if request.resolver_match.url_name == 'teacher_dashboard' %}active{% endif %}">
                         <a href="{% url 'teacher_dashboard' %}">📊 Overview</a>
@@ -94,10 +97,11 @@
                     </div>
                 </a>
 
-                <div style="display: flex; gap: 16px; align-items: center;">
-                    <a href="{% url 'home' %}" class="btn btn-secondary" style="font-size: 14px;">🏠 Home</a>
-                    <a href="{% url 'login' %}" class="btn btn-secondary" style="font-size: 14px;">🔐 Login</a>
-                    <a href="{% url 'register' %}" class="btn btn-primary" style="font-size: 14px;">📝 Register Account</a>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <a href="{% url 'home' %}" class="btn btn-secondary" style="font-size: 13px;">🏠 Home</a>
+                    <a href="{% url 'public_sandbox' %}" class="btn btn-secondary" style="font-size: 13px; color: #34D399; border-color: rgba(16, 185, 129, 0.4);">🧪 Zero-Login Sandbox</a>
+                    <a href="{% url 'login' %}" class="btn btn-secondary" style="font-size: 13px;">🔐 Login</a>
+                    <a href="{% url 'register' %}" class="btn btn-primary" style="font-size: 13px;">📝 Register Account</a>
                 </div>
             </header>
             {% endif %}
