@@ -81,6 +81,20 @@ def compute_onnx_embedding(img_bgr, bbox):
         logger.error(f"ONNX embedding computation error: {e}")
         return None
 
+def compute_centroid_embedding(embeddings_list):
+    """
+    Given multiple 512D ArcFace embeddings for a single student (extracted from multiple images),
+    computes the normalized mean centroid vector.
+    """
+    if not embeddings_list:
+        return None
+    matrix = np.array(embeddings_list, dtype=np.float32)
+    mean_vector = np.mean(matrix, axis=0)
+    norm = np.linalg.norm(mean_vector)
+    if norm > 0:
+        mean_vector = mean_vector / norm
+    return mean_vector.tolist()
+
 def cosine_similarity(v1, v2):
     v1 = np.array(v1, dtype=np.float32)
     v2 = np.array(v2, dtype=np.float32)
@@ -172,36 +186,49 @@ def sync_dataset_to_db(dataset_path, StudentEmbedding_model):
             if not img_files:
                 continue
 
-            img_path = str(img_files[0])
-            img_bgr = cv2.imread(img_path)
-            if img_bgr is None:
-                continue
+            extracted_embeddings = []
+            primary_cloudinary_url = None
 
-            # Upload to Cloudinary if available
-            cloudinary_url = None
-            if getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
-                try:
-                    import cloudinary.uploader
-                    res = cloudinary.uploader.upload(img_path, public_id=f"student_{roll_number}", folder="scms_student_dataset", overwrite=True)
-                    cloudinary_url = res.get('secure_url')
-                except Exception as e:
-                    logger.error(f"Cloudinary dataset upload failed for {roll_number}: {e}")
+            for img_path_obj in img_files:
+                img_path = str(img_path_obj)
+                img_bgr = cv2.imread(img_path)
+                if img_bgr is None:
+                    continue
 
-            faces = extract_faces_from_image(img_bgr)
-            if faces:
-                emb = faces[0]['embedding']
+                # Upload primary image to Cloudinary under scms_student_dataset/<roll_number>/
+                if primary_cloudinary_url is None and getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
+                    try:
+                        import cloudinary.uploader
+                        res = cloudinary.uploader.upload(
+                            img_path,
+                            public_id=f"{roll_number}_image",
+                            folder=f"scms_student_dataset/{roll_number}",
+                            overwrite=True
+                        )
+                        primary_cloudinary_url = res.get('secure_url')
+                    except Exception as e:
+                        logger.error(f"Cloudinary dataset upload failed for {roll_number}: {e}")
+
+                faces = extract_faces_from_image(img_bgr)
+                if faces:
+                    extracted_embeddings.append(faces[0]['embedding'])
+
+            # Compute centroid embedding across multiple photos for maximum accuracy
+            final_embedding = compute_centroid_embedding(extracted_embeddings)
+
+            if final_embedding:
                 record, created = StudentEmbedding_model.objects.get_or_create(
                     roll_number=roll_number,
                     defaults={
                         'student_name': f"Student {roll_number}",
-                        'image_path': img_path,
-                        'image_url': cloudinary_url or ''
+                        'image_path': str(img_files[0]),
+                        'image_url': primary_cloudinary_url or ''
                     }
                 )
-                record.set_embedding(emb)
-                record.image_path = img_path
-                if cloudinary_url:
-                    record.image_url = cloudinary_url
+                record.set_embedding(final_embedding)
+                record.image_path = str(img_files[0])
+                if primary_cloudinary_url:
+                    record.image_url = primary_cloudinary_url
                 record.save()
 
                 if created:

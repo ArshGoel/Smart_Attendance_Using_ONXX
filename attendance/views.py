@@ -249,62 +249,70 @@ def api_upload_classroom_image(request):
 def api_upload_student_face(request):
     """
     Teacher Dataset Manager endpoint:
-    Uploads a student dataset photo to Cloudinary, extracts 512D ArcFace vector, and updates DB!
+    Accepts single or MULTIPLE face photos for a student, uploads to Cloudinary,
+    extracts 512D ArcFace vectors across all images, computes centroid embedding vector, and updates DB!
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
 
     roll_number = request.POST.get('roll_number', '').strip().upper()
     student_name = request.POST.get('student_name', '').strip()
-    photo_file = request.FILES.get('student_photo')
+    photo_files = request.FILES.getlist('student_photos') or request.FILES.getlist('student_photo')
 
-    if not roll_number or not photo_file:
-        return JsonResponse({'status': 'error', 'message': 'Roll Number and Student Photo are required'}, status=400)
+    if not roll_number or not photo_files:
+        return JsonResponse({'status': 'error', 'message': 'Roll Number and Student Photo(s) are required'}, status=400)
 
     try:
-        file_bytes = photo_file.read()
-        nparr = np.frombuffer(file_bytes, np.uint8)
-        img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        extracted_vectors = []
+        primary_cloudinary_url = None
 
-        if img_bgr is None:
-            return JsonResponse({'status': 'error', 'message': 'Invalid image format'}, status=400)
+        for idx, photo_file in enumerate(photo_files, start=1):
+            file_bytes = photo_file.read()
+            nparr = np.frombuffer(file_bytes, np.uint8)
+            img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-        # Upload photo to Cloudinary
-        cloudinary_url = None
-        if getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
-            try:
-                import cloudinary.uploader
-                photo_file.seek(0)
-                res = cloudinary.uploader.upload(
-                    photo_file,
-                    public_id=f"student_{roll_number}",
-                    folder="scms_student_dataset",
-                    overwrite=True
-                )
-                cloudinary_url = res.get('secure_url')
-            except Exception as e:
-                logger.error(f"Cloudinary dataset photo upload error: {e}")
+            if img_bgr is None:
+                continue
 
-        # Extract 512D face vector
-        faces = extract_faces_from_image(img_bgr)
-        if not faces:
-            return JsonResponse({'status': 'error', 'message': 'No face detected in uploaded student photo! Please upload a clear frontal face image.'}, status=400)
+            # Upload photo to Cloudinary under scms_student_dataset/<roll_number>/
+            if primary_cloudinary_url is None and getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
+                try:
+                    import cloudinary.uploader
+                    photo_file.seek(0)
+                    res = cloudinary.uploader.upload(
+                        photo_file,
+                        public_id=f"{roll_number}_photo_{idx}",
+                        folder=f"scms_student_dataset/{roll_number}",
+                        overwrite=True
+                    )
+                    primary_cloudinary_url = res.get('secure_url')
+                except Exception as e:
+                    logger.error(f"Cloudinary dataset photo upload error for {roll_number}: {e}")
 
-        emb = faces[0]['embedding']
+            faces = extract_faces_from_image(img_bgr)
+            if faces:
+                extracted_vectors.append(faces[0]['embedding'])
+
+        if not extracted_vectors:
+            return JsonResponse({'status': 'error', 'message': 'No face detected in uploaded photo(s)! Please upload clear frontal face images.'}, status=400)
+
+        # Compute centroid embedding across all uploaded photos for maximum accuracy
+        from .face_engine import compute_centroid_embedding
+        final_embedding = compute_centroid_embedding(extracted_vectors)
 
         # Update or create StudentEmbedding record
         record, created = StudentEmbedding.objects.get_or_create(
             roll_number=roll_number,
             defaults={
                 'student_name': student_name or f"Student {roll_number}",
-                'image_url': cloudinary_url or ''
+                'image_url': primary_cloudinary_url or ''
             }
         )
-        record.set_embedding(emb)
+        record.set_embedding(final_embedding)
         if student_name:
             record.student_name = student_name
-        if cloudinary_url:
-            record.image_url = cloudinary_url
+        if primary_cloudinary_url:
+            record.image_url = primary_cloudinary_url
         record.save()
 
         # Ensure User & UserProfile exist
@@ -334,8 +342,9 @@ def api_upload_student_face(request):
             'status': 'success',
             'roll_number': roll_number,
             'student_name': record.student_name,
-            'image_url': cloudinary_url,
-            'message': f"Face dataset photo for {roll_number} uploaded to Cloudinary and 512D ArcFace vector updated successfully!"
+            'image_url': primary_cloudinary_url,
+            'photos_processed': len(extracted_vectors),
+            'message': f"Enrolled {len(extracted_vectors)} photo(s) for {roll_number}! 512D Centroid Vector uploaded to Cloudinary & Database."
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
