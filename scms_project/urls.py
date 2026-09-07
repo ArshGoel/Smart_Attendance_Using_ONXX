@@ -9,7 +9,7 @@ urlpatterns = [
     path('', include('attendance.urls')),
 
     # Root Favicon & Web Manifest Shortcuts
-    path('favicon.ico', RedirectViewwz.as_view(url=static('favicon/favicon.ico'), permanent=True)),
+    path('favicon.ico', RedirectView.as_view(url=static('favicon/favicon.ico'), permanent=True)),
     path('favicon-96x96.png', RedirectView.as_view(url=static('favicon/favicon-96x96.png'), permanent=True)),
     path('favicon.svg', RedirectView.as_view(url=static('favicon/favicon.svg'), permanent=True)),
     path('apple-touch-icon.png', RedirectView.as_view(url=static('favicon/apple-touch-icon.png'), permanent=True)),
