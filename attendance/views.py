@@ -264,6 +264,7 @@ def api_upload_student_face(request):
 
     try:
         cloudinary_urls = []
+        extracted_vectors = []
         for idx, photo_file in enumerate(photo_files, start=1):
             file_bytes = photo_file.read()
             nparr = np.frombuffer(file_bytes, np.uint8)
