@@ -263,9 +263,7 @@ def api_upload_student_face(request):
         return JsonResponse({'status': 'error', 'message': 'Roll Number and Student Photo(s) are required'}, status=400)
 
     try:
-        extracted_vectors = []
-        primary_cloudinary_url = None
-
+        cloudinary_urls = []
         for idx, photo_file in enumerate(photo_files, start=1):
             file_bytes = photo_file.read()
             nparr = np.frombuffer(file_bytes, np.uint8)
@@ -275,7 +273,7 @@ def api_upload_student_face(request):
                 continue
 
             # Upload photo to Cloudinary under scms_student_dataset/<roll_number>/
-            if primary_cloudinary_url is None and getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
+            if getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
                 try:
                     import cloudinary.uploader
                     photo_file.seek(0)
@@ -285,13 +283,17 @@ def api_upload_student_face(request):
                         folder=f"scms_student_dataset/{roll_number}",
                         overwrite=True
                     )
-                    primary_cloudinary_url = res.get('secure_url')
+                    cloud_url = res.get('secure_url')
+                    if cloud_url:
+                        cloudinary_urls.append(cloud_url)
                 except Exception as e:
-                    logger.error(f"Cloudinary dataset photo upload error for {roll_number}: {e}")
+                    logger.error(f"Cloudinary dataset photo upload error for {roll_number} (#{idx}): {e}")
 
             faces = extract_faces_from_image(img_bgr)
             if faces:
                 extracted_vectors.append(faces[0]['embedding'])
+
+        primary_cloudinary_url = cloudinary_urls[0] if cloudinary_urls else None
 
         if not extracted_vectors:
             return JsonResponse({'status': 'error', 'message': 'No face detected in uploaded photo(s)! Please upload clear frontal face images.'}, status=400)

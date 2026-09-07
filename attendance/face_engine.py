@@ -189,25 +189,27 @@ def sync_dataset_to_db(dataset_path, StudentEmbedding_model):
             extracted_embeddings = []
             primary_cloudinary_url = None
 
-            for img_path_obj in img_files:
+            for idx, img_path_obj in enumerate(img_files, start=1):
                 img_path = str(img_path_obj)
                 img_bgr = cv2.imread(img_path)
                 if img_bgr is None:
                     continue
 
-                # Upload primary image to Cloudinary under scms_student_dataset/<roll_number>/
-                if primary_cloudinary_url is None and getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
+                # Upload all images to Cloudinary under scms_student_dataset/<roll_number>/
+                if getattr(settings, 'CLOUDINARY_CLOUD_NAME', None):
                     try:
                         import cloudinary.uploader
                         res = cloudinary.uploader.upload(
                             img_path,
-                            public_id=f"{roll_number}_image",
+                            public_id=f"{roll_number}_photo_{idx}",
                             folder=f"scms_student_dataset/{roll_number}",
                             overwrite=True
                         )
-                        primary_cloudinary_url = res.get('secure_url')
+                        cloud_url = res.get('secure_url')
+                        if cloud_url and primary_cloudinary_url is None:
+                            primary_cloudinary_url = cloud_url
                     except Exception as e:
-                        logger.error(f"Cloudinary dataset upload failed for {roll_number}: {e}")
+                        logger.error(f"Cloudinary dataset upload failed for {roll_number} (#{idx}): {e}")
 
                 faces = extract_faces_from_image(img_bgr)
                 if faces:
