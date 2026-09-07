@@ -184,8 +184,16 @@ async function handleStudentFaceUpload(e) {
         try {
             res = JSON.parse(rawText);
         } catch (jsonErr) {
-            if (response.status === 413 || rawText.includes("Too Large") || rawText.includes("Request En")) {
-                throw new Error("Uploaded photo payload is too large for server limits. Image was automatically compressed, please select fewer/smaller images.");
+            if (response.status === 413 || rawText.toLowerCase().includes("request entity too large")) {
+                throw new Error("Uploaded photo payload is too large for server limits. Please upload fewer or smaller images.");
+            }
+            if (rawText.includes("<!DOCTYPE html>") || rawText.includes("<html")) {
+                if (rawText.includes("login") || response.url.includes("login")) {
+                    throw new Error("Your session has expired. Please log in again.");
+                }
+                const titleMatch = rawText.match(/<title>(.*?)<\/title>/i) || rawText.match(/<h1>(.*?)<\/h1>/i);
+                const titleText = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+                throw new Error(titleText || `Server returned HTML error page (Status ${response.status})`);
             }
             throw new Error(rawText.substring(0, 150) || `Server error status ${response.status}`);
         }

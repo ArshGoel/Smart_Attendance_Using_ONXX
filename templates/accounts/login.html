@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - Smart Classroom Management System{% endblock %}
+
+{% block content %}
+<div style="max-width: 440px; margin: 40px auto; padding: 0 16px;">
+    <div class="glass-card" style="padding: 36px; border: 1px solid rgba(99, 102, 241, 0.25); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);">
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 28px;">
+            <div style="width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(135deg, #6366F1, #8B5CF6); display: flex; align-items: center; justify-content: center; font-size: 26px; margin: 0 auto 16px auto; box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);">
+                🔐
+            </div>
+            <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 6px;">Sign In to SCMS</h2>
+            <p style="font-size: 13px; color: #94A3B8;">Enter your Roll Number or Teacher ID to access portal</p>
+        </div>
+
+        {% if error_message %}
+        <div class="badge badge-danger" style="display: block; text-align: center; padding: 12px; font-size: 13px; margin-bottom: 20px; width: 100%; border-radius: 8px;">
+            ⚠️ {{ error_message }}
+        </div>
+        {% endif %}
+
+        <!-- Direct HTML5 Form (No Django Forms) -->
+        <form method="POST" action="{% url 'login' %}">
+            {% csrf_token %}
+
+            <!-- Role Selector Tabs -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; background: rgba(15, 23, 42, 0.6); padding: 4px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                <button type="button" id="btn-role-student" class="btn btn-primary" style="font-size: 13px; padding: 8px;" onclick="setRole('STUDENT')">
+                    🎓 Student
+                </button>
+                <button type="button" id="btn-role-teacher" class="btn btn-secondary" style="font-size: 13px; padding: 8px;" onclick="setRole('TEACHER')">
+                    👨‍🏫 Teacher
+                </button>
+            </div>
+            <input type="hidden" name="role" id="input-role" value="STUDENT">
+
+            <div class="form-group">
+                <label class="form-label" id="label-username">Student Roll Number / Username</label>
+                <input type="text" name="username" id="input-username" class="form-input" placeholder="e.g. 228R1A0566" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" name="password" id="input-password" class="form-input" placeholder="••••••••" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 15px; margin-top: 8px;">
+                🚀 Login to Dashboard
+            </button>
+        </form>
+
+        <!-- Quick Demo Accounts Quick-Fill Box -->
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.08); text-align: center;">
+            <div style="font-size: 12px; color: #94A3B8; margin-bottom: 10px; font-weight: 600; text-transform: uppercase;">⚡ Quick Demo Auto-Fill</div>
+            <div style="display: flex; gap: 8px; justify-content: center;">
+                <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="fillDemo('teacher', 'teacher123', 'TEACHER')">
+                    👨‍🏫 Teacher Demo
+                </button>
+                <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="fillDemo('228R1A0566', 'student123', 'STUDENT')">
+                    🎓 Student Demo
+                </button>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px; text-align: center; font-size: 13px; color: #94A3B8;">
+            Don't have an account? <a href="{% url 'register' %}" style="color: #818CF8; font-weight: 600; text-decoration: none;">Register Here →</a>
+        </div>
+    </div>
+</div>
+
+<script>
+function setRole(role) {
+    document.getElementById('input-role').value = role;
+    const btnStudent = document.getElementById('btn-role-student');
+    const btnTeacher = document.getElementById('btn-role-teacher');
+    const labelUser = document.getElementById('label-username');
+    const inputUser = document.getElementById('input-username');
+
+    if (role === 'TEACHER') {
+        btnStudent.className = 'btn btn-secondary';
+        btnTeacher.className = 'btn btn-primary';
+        labelUser.innerText = 'Teacher Username / ID';
+        inputUser.placeholder = 'e.g. teacher';
+    } else {
+        btnStudent.className = 'btn btn-primary';
+        btnTeacher.className = 'btn btn-secondary';
+        labelUser.innerText = 'Student Roll Number / Username';
+        inputUser.placeholder = 'e.g. 228R1A0566';
+    }
+}
+
+function fillDemo(user, pass, role) {
+    setRole(role);
+    document.getElementById('input-username').value = user;
+    document.getElementById('input-password').value = pass;
+}
+
+// Auto-fill from URL query parameters if present
+window.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    const u = params.get('user');
+    const p = params.get('pass');
+    const r = params.get('role');
+    if (u && p) {
+        fillDemo(u, p, r || 'STUDENT');
+    }
+});
+</script>
+{% endblock %}

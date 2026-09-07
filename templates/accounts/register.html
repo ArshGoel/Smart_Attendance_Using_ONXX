@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+
+{% block title %}Register - Smart Classroom Management System{% endblock %}
+
+{% block content %}
+<div style="max-width: 520px; margin: 30px auto; padding: 0 16px;">
+    <div class="glass-card" style="padding: 36px; border: 1px solid rgba(99, 102, 241, 0.25); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);">
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 28px;">
+            <div style="width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(135deg, #10B981, #059669); display: flex; align-items: center; justify-content: center; font-size: 26px; margin: 0 auto 16px auto; box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);">
+                📝
+            </div>
+            <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 6px;">Create an Account</h2>
+            <p style="font-size: 13px; color: #94A3B8;">Register as a Student or Teacher in SCMS</p>
+        </div>
+
+        {% if error_message %}
+        <div class="badge badge-danger" style="display: block; text-align: center; padding: 12px; font-size: 13px; margin-bottom: 20px; width: 100%; border-radius: 8px;">
+            ⚠️ {{ error_message }}
+        </div>
+        {% endif %}
+
+        <!-- Direct HTML5 Form (No Django Forms) -->
+        <form method="POST" action="{% url 'register' %}">
+            {% csrf_token %}
+
+            <!-- Role Selector Tabs -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; background: rgba(15, 23, 42, 0.6); padding: 4px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                <button type="button" id="btn-reg-student" class="btn btn-primary" style="font-size: 13px; padding: 8px;" onclick="setRegRole('STUDENT')">
+                    🎓 Student Account
+                </button>
+                <button type="button" id="btn-reg-teacher" class="btn btn-secondary" style="font-size: 13px; padding: 8px;" onclick="setRegRole('TEACHER')">
+                    👨‍🏫 Teacher Account
+                </button>
+            </div>
+            <input type="hidden" name="role" id="reg-role" value="STUDENT">
+
+            <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" name="full_name" class="form-input" placeholder="e.g. John Doe" required>
+            </div>
+
+            <div class="form-group" id="group-roll-number">
+                <label class="form-label" id="label-roll">Roll Number / Student ID</label>
+                <input type="text" name="roll_number" id="input-roll" class="form-input" placeholder="e.g. 228R1A0599" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" name="email" class="form-input" placeholder="e.g. student@scms.edu">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Department</label>
+                <select name="department" class="form-input" style="background: #0F172A; color: #F8FAFC;">
+                    <option value="Computer Science & Engineering">Computer Science & Engineering (CSE)</option>
+                    <option value="Artificial Intelligence & ML">Artificial Intelligence & ML (CSM)</option>
+                    <option value="Data Science">Data Science (CSD)</option>
+                    <option value="Electronics & Communication">Electronics & Communication (ECE)</option>
+                </select>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" name="password" class="form-input" placeholder="••••••••" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Confirm Password</label>
+                    <input type="password" name="confirm_password" class="form-input" placeholder="••••••••" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 15px; margin-top: 8px;">
+                ✨ Complete Registration & Login
+            </button>
+        </form>
+
+        <div style="margin-top: 20px; text-align: center; font-size: 13px; color: #94A3B8;">
+            Already have an account? <a href="{% url 'login' %}" style="color: #818CF8; font-weight: 600; text-decoration: none;">Login Here →</a>
+        </div>
+    </div>
+</div>
+
+<script>
+function setRegRole(role) {
+    document.getElementById('reg-role').value = role;
+    const btnStudent = document.getElementById('btn-reg-student');
+    const btnTeacher = document.getElementById('btn-reg-teacher');
+    const labelRoll = document.getElementById('label-roll');
+    const inputRoll = document.getElementById('input-roll');
+
+    if (role === 'TEACHER') {
+        btnStudent.className = 'btn btn-secondary';
+        btnTeacher.className = 'btn btn-primary';
+        labelRoll.innerText = 'Teacher Employee ID / Code';
+        inputRoll.placeholder = 'e.g. TCH102';
+        inputRoll.removeAttribute('required');
+    } else {
+        btnStudent.className = 'btn btn-primary';
+        btnTeacher.className = 'btn btn-secondary';
+        labelRoll.innerText = 'Roll Number / Student ID';
+        inputRoll.placeholder = 'e.g. 228R1A0599';
+        inputRoll.setAttribute('required', 'true');
+    }
+}
+</script>
+{% endblock %}
