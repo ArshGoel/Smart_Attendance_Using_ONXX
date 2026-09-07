@@ -1,8 +1,15 @@
-echo "Installing Python dependencies..."
-python3 -m pip install -r requirements.txt
+echo "Creating virtual environment..."
+python3 -m venv venv
+source venv/bin/activate
 
-echo "Collecting Static Files..."
-python3 manage.py collectstatic --noinput
+echo "Installing dependencies..."
+pip install -r requirements.txt
 
-echo "Applying Database Migrations..."
+echo "Applying Migrations..."
 python3 manage.py migrate
+
+echo "Collecting static files..."
+python3 manage.py collectstatic --noinput --clear
+
+# Guarantee that the output directory exists
+mkdir -p staticfiles
