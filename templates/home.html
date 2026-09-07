@@ -66,62 +66,6 @@
     </div>
 </div>
 
-<!-- Test Credentials Box -->
-<div class="glass-card" style="margin-bottom: 48px; padding: 28px; border: 1px solid rgba(99, 102, 241, 0.3); background: rgba(30, 41, 59, 0.6);">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-        <div>
-            <h3 style="font-size: 18px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
-                <span>🔑</span> Quick Demo Access Credentials
-            </h3>
-            <p style="font-size: 13px; color: #94A3B8; margin: 0;">Use these pre-loaded accounts to test Teacher and Student capabilities instantly!</p>
-        </div>
-        <a href="{% url 'login' %}" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px;">
-            Go to Login Page →
-        </a>
-    </div>
-
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
-        <!-- Teacher Credential Card -->
-        <div style="padding: 16px; border-radius: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="font-weight: 700; color: #F8FAFC; font-size: 14px;">👨‍🏫 Teacher Portal</span>
-                <span class="badge badge-success" style="font-size: 10px;">Full Access</span>
-            </div>
-            <div style="font-size: 13px; color: #94A3B8; margin-bottom: 4px;">Username: <strong style="color: #6366F1;">teacher</strong></div>
-            <div style="font-size: 13px; color: #94A3B8; margin-bottom: 12px;">Password: <strong style="color: #6366F1;">teacher123</strong></div>
-            <a href="{% url 'login' %}?user=teacher&pass=teacher123&role=TEACHER" class="btn btn-secondary" style="width: 100%; font-size: 12px; padding: 6px; text-align: center;">
-                Login as Teacher
-            </a>
-        </div>
-
-        <!-- Student Credential Card -->
-        <div style="padding: 16px; border-radius: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="font-weight: 700; color: #F8FAFC; font-size: 14px;">🎓 Student Portal</span>
-                <span class="badge badge-info" style="font-size: 10px;">Student View</span>
-            </div>
-            <div style="font-size: 13px; color: #94A3B8; margin-bottom: 4px;">Roll Number: <strong style="color: #10B981;">228R1A0566</strong></div>
-            <div style="font-size: 13px; color: #94A3B8; margin-bottom: 12px;">Password: <strong style="color: #10B981;">student123</strong></div>
-            <a href="{% url 'login' %}?user=228R1A0566&pass=student123&role=STUDENT" class="btn btn-secondary" style="width: 100%; font-size: 12px; padding: 6px; text-align: center;">
-                Login as Student
-            </a>
-        </div>
-
-        <!-- Admin Credential Card -->
-        <div style="padding: 16px; border-radius: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="font-weight: 700; color: #F8FAFC; font-size: 14px;">🛡️ Superuser Admin</span>
-                <span class="badge badge-warning" style="font-size: 10px;">Django Admin</span>
-            </div>
-            <div style="font-size: 13px; color: #94A3B8; margin-bottom: 4px;">Username: <strong style="color: #F59E0B;">admin</strong></div>
-            <div style="font-size: 13px; color: #94A3B8; margin-bottom: 12px;">Password: <strong style="color: #F59E0B;">admin123</strong></div>
-            <a href="/admin/" target="_blank" class="btn btn-secondary" style="width: 100%; font-size: 12px; padding: 6px; text-align: center;">
-                Open Django Admin ↗
-            </a>
-        </div>
-    </div>
-</div>
-
 <!-- Architecture & Core Modules -->
 <div style="margin-bottom: 48px;">
     <div style="text-align: center; margin-bottom: 32px;">
