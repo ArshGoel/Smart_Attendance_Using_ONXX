@@ -15,7 +15,7 @@ urlpatterns = [
     path('api/extract-target-embedding/', views.api_extract_target_embedding, name='api_extract_target_embedding'),
     path('api/public-sandbox-frame/', views.api_public_sandbox_frame, name='api_public_sandbox_frame'),
 
-w    # API Endpoints (No Django forms)
+    # API Endpoints (No Django forms)
     path('api/process-frame/', views.api_process_frame, name='api_process_frame'),
     path('api/upload-classroom-image/', views.api_upload_classroom_image, name='api_upload_classroom_image'),
     path('api/upload-student-face/', views.api_upload_student_face, name='api_upload_student_face'),
